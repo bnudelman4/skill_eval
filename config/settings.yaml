@@ -118,9 +118,8 @@ ground_truth:
     max_retries: 4
     denomination_sanity_check: true
   sec_xbrl:
-    # EDGAR requires a descriptive User-Agent with contact info.
-    # PENDING Part A7: replace with the contact you choose.
-    user_agent: "REPLACE_WITH_NAME_AND_EMAIL"
+    # EDGAR requires a descriptive User-Agent with contact info (SEC fair-access).
+    user_agent: "finskill-eval Benjamin Nudelman bnudelman2@gmail.com"
     company_facts_url: "https://data.sec.gov/api/xbrl/companyfacts/"
   daloopa:
     request_scope: read_only

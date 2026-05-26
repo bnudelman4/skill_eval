@@ -93,7 +93,9 @@ def verify(
     verdicts: list[CellVerdict] = []
     for cell in ledger.cells:
         pkey = period_key(cell.period)
-        truth = ground_truth.get(ledger.ticker, pkey, cell.canonical_label)
+        # sources may return a raw scalar or a Value record; unwrap to the scalar
+        raw_truth = ground_truth.get(ledger.ticker, pkey, cell.canonical_label)
+        truth = getattr(raw_truth, "value", raw_truth)
 
         # exact non-numeric (e.g. ticker)
         if isinstance(cell.value, str):
