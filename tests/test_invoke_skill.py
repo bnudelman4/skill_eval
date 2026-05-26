@@ -141,11 +141,23 @@ def test_live_headless_envelope_is_parseable():
     Uses a trivial prompt (no skill) so it stays cheap; we only assert the
     harness can shell out and read a populated cost from the JSON envelope.
     """
-    from finskill_eval.runner.invoke_skill import _default_runner
+    from dotenv import load_dotenv
 
-    cmd = ["claude", "-p", "say hi", "--output-format", "json"]
+    from finskill_eval.runner.invoke_skill import _default_runner, build_command
+
+    # --bare forces the env ANTHROPIC_API_KEY (metered), bypassing any session
+    # login. Verified: without --bare the CLI uses the local OAuth login instead.
+    # Load .env so the metered key is present (pytest's env lacks it otherwise).
+    load_dotenv(Path(".env"), override=True)
+    assert os.environ.get("ANTHROPIC_API_KEY"), "ANTHROPIC_API_KEY missing from .env"
+    cmd = build_command(
+        prompt="say hi", model="claude-sonnet-4-6", max_turns=5,
+        allowed_tools=["Read"], bare=True, output_format="json",
+    )
     proc = _default_runner(cmd, ".", 120)
-    assert proc.returncode == 0
+    # A populated cost on the metered key is the proof the call really ran;
+    # we don't assert returncode because a trivial prompt may or may not consume
+    # a tool turn.
     env = parse_envelope(proc.stdout)
     assert env.cost_usd > 0.0
     assert env.num_turns >= 1
