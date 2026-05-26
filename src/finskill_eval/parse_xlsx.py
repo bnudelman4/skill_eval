@@ -53,6 +53,17 @@ def _classify_kind(canonical_label: str, unit: str, is_numeric: bool) -> str:
     return "direct"
 
 
+def _faith_cell_type(kind: str, formula: str | None, n_inputs: int) -> str:
+    """FAITH 4-type taxonomy: direct lookup / comparative / bivariate / multivariate."""
+    if kind == "direct":
+        return "direct_lookup"
+    if formula == "growth":
+        return "comparative"  # same metric across periods
+    if n_inputs >= 3:
+        return "multivariate"
+    return "bivariate"  # two distinct metrics
+
+
 def parse(path: str | Path, *, skill: str, ticker: str) -> Ledger:
     wb = load_workbook(Path(path), data_only=True)
     ws = wb.active
@@ -116,6 +127,7 @@ def parse(path: str | Path, *, skill: str, ticker: str) -> Ledger:
                 value=value,
                 unit=unit,
                 kind=kind,
+                cell_type="direct_lookup" if kind == "direct" else None,
             )
         )
         by_label_period[(canonical, pkey)] = cell_id
@@ -131,7 +143,16 @@ def parse(path: str | Path, *, skill: str, ticker: str) -> Ledger:
                 for lbl in input_labels
                 if (lbl, pkey2) in by_label_period
             )
-            wired.append(c.model_copy(update={"formula": formula, "inputs": input_ids}))
+            cell_type = _faith_cell_type("derived", formula, len(input_ids))
+            wired.append(
+                c.model_copy(
+                    update={
+                        "formula": formula,
+                        "inputs": input_ids,
+                        "cell_type": cell_type,
+                    }
+                )
+            )
         else:
             wired.append(c)
 

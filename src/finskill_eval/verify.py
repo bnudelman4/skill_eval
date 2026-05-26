@@ -37,6 +37,7 @@ class CellVerdict:
     canonical_label: str
     period: Optional[str]
     kind: str
+    cell_type: Optional[str]
     pred: Value
     truth: Value
     recomputed: Optional[float]
@@ -102,7 +103,7 @@ def verify(
             ok = truth is not None and str(cell.value) == str(truth)
             verdicts.append(
                 CellVerdict(
-                    cell.cell_id, cell.canonical_label, pkey, cell.kind,
+                    cell.cell_id, cell.canonical_label, pkey, cell.kind, cell.cell_type,
                     cell.value, truth, None, None,
                     "exact" if ok else "disagreement",
                     "PASS" if ok else "FAIL",
@@ -116,7 +117,7 @@ def verify(
             if arith.rel_err > arith_tol:
                 verdicts.append(
                     CellVerdict(
-                        cell.cell_id, cell.canonical_label, pkey, cell.kind,
+                        cell.cell_id, cell.canonical_label, pkey, cell.kind, cell.cell_type,
                         cell.value, truth, recomp, arith.rel_err,
                         arith.band, "FAIL",
                         note="stated value disagrees with recompute of its own inputs",
@@ -126,7 +127,7 @@ def verify(
             if truth is None:
                 verdicts.append(
                     CellVerdict(
-                        cell.cell_id, cell.canonical_label, pkey, cell.kind,
+                        cell.cell_id, cell.canonical_label, pkey, cell.kind, cell.cell_type,
                         cell.value, None, recomp, arith.rel_err,
                         arith.band, "FAIL", note="no ground-truth value",
                     )
@@ -135,7 +136,7 @@ def verify(
             src = compare(recomp, float(truth), bands=b)
             verdicts.append(
                 CellVerdict(
-                    cell.cell_id, cell.canonical_label, pkey, cell.kind,
+                    cell.cell_id, cell.canonical_label, pkey, cell.kind, cell.cell_type,
                     cell.value, truth, recomp, src.rel_err,
                     wider(arith.band, src.band), src.status,
                 )
@@ -146,7 +147,7 @@ def verify(
         if truth is None:
             verdicts.append(
                 CellVerdict(
-                    cell.cell_id, cell.canonical_label, pkey, cell.kind,
+                    cell.cell_id, cell.canonical_label, pkey, cell.kind, cell.cell_type,
                     cell.value, None, None, None,
                     "disagreement", "FAIL", note="no ground-truth value",
                 )
@@ -155,7 +156,7 @@ def verify(
         r = compare(float(cell.value), float(truth), bands=b)
         verdicts.append(
             CellVerdict(
-                cell.cell_id, cell.canonical_label, pkey, cell.kind,
+                cell.cell_id, cell.canonical_label, pkey, cell.kind, cell.cell_type,
                 cell.value, truth, None, r.rel_err, r.band, r.status,
             )
         )

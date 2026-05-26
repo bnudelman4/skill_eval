@@ -55,6 +55,13 @@ def test_derived_cells_wired_to_inputs(skill):
                 assert led.by_id(input_id) is not None
 
 
+def test_parse_assigns_faith_cell_type(skill):
+    led = parse(FIX / f"sample_{skill}.xlsx", skill=skill, ticker="AAPL")
+    expected = _contract_by_label(skill)
+    for c in led.cells:
+        assert c.cell_type == expected[c.canonical_label]["cell_type"], c.canonical_label
+
+
 def test_unit_scaling_thousands_to_canonical():
     led = parse(FIX / "sample_tearsheet.xlsx", skill="tearsheet", ticker="AAPL")
     shares = next(c for c in led.cells if c.canonical_label == "shares_outstanding")
