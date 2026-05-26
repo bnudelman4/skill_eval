@@ -52,6 +52,12 @@ def _all_verdicts(records: Iterable[SampleRecord]) -> list[dict]:
     return [v for r in records for v in r.verdicts]
 
 
+def pass_rate_at(verdicts: list[dict], band: str, order: list[str] | None = None) -> float:
+    """Public: cumulative pass-rate of a verdict set at a tolerance band.
+    FLAG cells are excluded from the denominator; WARN does not count as PASS."""
+    return _pass_rate_at(verdicts, band, order or _BAND_ORDER_DEFAULT)
+
+
 def _pass_rate_at(verdicts: list[dict], band: str, order: list[str]) -> float:
     gradeable = [v for v in verdicts if v["status"] != "FLAG"]
     if not gradeable:
