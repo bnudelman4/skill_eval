@@ -1,0 +1,18 @@
+# Secrets — never commit
+.env
+
+# Large / reproducible artifacts
+data/snapshots/
+results/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# OS / editor
+.DS_Store

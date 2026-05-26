@@ -1,0 +1,61 @@
+{
+  "_meta": {
+    "doc": "Known-answer contract for M1 fixtures. M2's verifier must reproduce every expected_band/expected_status below. Values are CANONICAL base units (see unit_scale). 'truth' is the mocked ground-truth value the verifier compares against in test_verify_endtoend.",
+    "unit_scale": {
+      "$mm": 1000000.0,
+      "thousands": 1000.0,
+      "%": 1.0,
+      "x": 1.0,
+      "": 1.0
+    },
+    "derived_formulas": {
+      "gross_margin": "gross_profit / revenue * 100",
+      "operating_margin": "operating_income / revenue * 100",
+      "ev_ebitda": "enterprise_value / ebitda",
+      "shareholder_yield": "(share_repurchases + dividends_paid) / market_capitalization * 100"
+    },
+    "status_legend": {
+      "PASS": "within a passing band",
+      "WARN": "materiality band (1-5%), surfaced not passed",
+      "FLAG": "disagreement (>5%), cross-vendor, manual review",
+      "FAIL": "exact-cell mismatch OR derived-cell arithmetic disagrees with Python recompute of its own inputs"
+    }
+  },
+
+  "tearsheet": {
+    "skill": "tearsheet",
+    "ticker": "AAPL",
+    "cells": [
+      {"cell_id": "ts_revenue", "label": "Revenue", "canonical_label": "revenue", "period": "FY2024", "raw_value": "391,035", "unit": "$mm", "value": 391035000000.0, "kind": "direct", "cell_type": "direct_lookup", "truth": 391035000000.0, "expected_band": "exact", "expected_status": "PASS"},
+      {"cell_id": "ts_net_income", "label": "Net income", "canonical_label": "net_income", "period": "FY2024", "raw_value": "93,736", "unit": "$mm", "value": 93736000000.0, "kind": "direct", "cell_type": "direct_lookup", "truth": 93736000000.0, "expected_band": "exact", "expected_status": "PASS"},
+      {"cell_id": "ts_gross_profit", "label": "Gross profit", "canonical_label": "gross_profit", "period": "FY2024", "raw_value": "180,683", "unit": "$mm", "value": 180683000000.0, "kind": "direct", "cell_type": "direct_lookup", "truth": 180683000000.0, "expected_band": "exact", "expected_status": "PASS"},
+      {"cell_id": "ts_operating_income", "label": "Operating income", "canonical_label": "operating_income", "period": "FY2024", "raw_value": "123,216", "unit": "$mm", "value": 123216000000.0, "kind": "direct", "cell_type": "direct_lookup", "truth": 123216000000.0, "expected_band": "exact", "expected_status": "PASS"},
+      {"cell_id": "ts_gross_margin", "label": "Gross margin", "canonical_label": "gross_margin", "period": "FY2024", "raw_value": "46.2%", "unit": "%", "value": 46.2, "kind": "derived", "cell_type": "bivariate", "formula": "gross_margin", "inputs": ["ts_gross_profit", "ts_revenue"], "recomputed": 46.206349815233935, "arithmetic_rel_err": 0.0001374, "truth": 46.206349815233935, "expected_band": "tight", "expected_status": "PASS"},
+      {"cell_id": "ts_operating_margin", "label": "Operating margin", "canonical_label": "operating_margin", "period": "FY2024", "raw_value": "40.0%", "unit": "%", "value": 40.0, "kind": "derived", "cell_type": "bivariate", "formula": "operating_margin", "inputs": ["ts_operating_income", "ts_revenue"], "recomputed": 31.510222870075566, "arithmetic_rel_err": 0.269429, "truth": 31.510222870075566, "expected_band": "disagreement", "expected_status": "FAIL", "note": "DELIBERATE ERROR: stated 40.0 vs recompute 31.51 from its own inputs -> skill arithmetic FAIL."},
+      {"cell_id": "ts_shares", "label": "Shares outstanding", "canonical_label": "shares_outstanding", "period": "FY2024", "raw_value": "15,408,000", "unit": "thousands", "value": 15408000000.0, "kind": "direct", "cell_type": "direct_lookup", "truth": 15408000000.0, "expected_band": "exact", "expected_status": "PASS", "note": "UNIT-SCALE: 15,408,000 thousands -> 15,408,000,000 canonical."},
+      {"cell_id": "ts_cash", "label": "Cash & equivalents", "canonical_label": "cash_and_equivalents", "period": "FY2024", "raw_value": "31,000", "unit": "$mm", "value": 31000000000.0, "kind": "direct", "cell_type": "direct_lookup", "truth": 29943000000.0, "expected_band": "materiality", "expected_status": "WARN", "note": "WARN: rel err 3.53%."}
+    ]
+  },
+
+  "comps": {
+    "skill": "comps",
+    "ticker": "AAPL",
+    "cells": [
+      {"cell_id": "cm_ticker", "label": "Ticker", "canonical_label": "ticker", "period": null, "raw_value": "AAPL", "unit": "", "value": "AAPL", "kind": "direct", "cell_type": "direct_lookup", "truth": "AAPL", "expected_band": "exact", "expected_status": "PASS", "note": "Non-numeric exact match."},
+      {"cell_id": "cm_ev", "label": "Enterprise value", "canonical_label": "enterprise_value", "period": "FY2024", "raw_value": "3,000,000", "unit": "$mm", "value": 3000000000000.0, "kind": "direct", "cell_type": "direct_lookup", "truth": 3000000000000.0, "expected_band": "exact", "expected_status": "PASS"},
+      {"cell_id": "cm_ebitda", "label": "EBITDA", "canonical_label": "ebitda", "period": "FY2024", "raw_value": "133,333", "unit": "$mm", "value": 133333000000.0, "kind": "direct", "cell_type": "direct_lookup", "truth": 133333000000.0, "expected_band": "exact", "expected_status": "PASS"},
+      {"cell_id": "cm_ev_ebitda", "label": "EV/EBITDA", "canonical_label": "ev_ebitda", "period": "FY2024", "raw_value": "22.5", "unit": "x", "value": 22.5, "kind": "derived", "cell_type": "bivariate", "formula": "ev_ebitda", "inputs": ["cm_ev", "cm_ebitda"], "recomputed": 22.500056250140624, "arithmetic_rel_err": 0.0000025, "truth": 22.500056250140624, "expected_band": "tight", "expected_status": "PASS"}
+    ]
+  },
+
+  "capital_allocation": {
+    "skill": "capital_allocation",
+    "ticker": "AAPL",
+    "cells": [
+      {"cell_id": "ca_dividends", "label": "Dividends paid", "canonical_label": "dividends_paid", "period": "FY2024", "raw_value": "15,234", "unit": "$mm", "value": 15234000000.0, "kind": "direct", "cell_type": "direct_lookup", "truth": 15234000000.0, "expected_band": "exact", "expected_status": "PASS"},
+      {"cell_id": "ca_buybacks", "label": "Share repurchases", "canonical_label": "share_repurchases", "period": "FY2024", "raw_value": "94,949", "unit": "$mm", "value": 94949000000.0, "kind": "direct", "cell_type": "direct_lookup", "truth": 94949000000.0, "expected_band": "exact", "expected_status": "PASS"},
+      {"cell_id": "ca_market_cap", "label": "Market capitalization", "canonical_label": "market_capitalization", "period": "FY2024", "raw_value": "3,000,000", "unit": "$mm", "value": 3000000000000.0, "kind": "direct", "cell_type": "direct_lookup", "truth": 3000000000000.0, "expected_band": "exact", "expected_status": "PASS"},
+      {"cell_id": "ca_shareholder_yield", "label": "Shareholder yield", "canonical_label": "shareholder_yield", "period": "FY2024", "raw_value": "3.67%", "unit": "%", "value": 3.67, "kind": "derived", "cell_type": "multivariate", "formula": "shareholder_yield", "inputs": ["ca_buybacks", "ca_dividends", "ca_market_cap"], "recomputed": 3.6727666666666665, "arithmetic_rel_err": 0.000753, "truth": 3.6727666666666665, "expected_band": "tight", "expected_status": "PASS"}
+    ]
+  }
+}

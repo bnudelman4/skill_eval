@@ -1,0 +1,161 @@
+# =============================================================================
+# settings.yaml  --  finskill-eval pipeline configuration
+# -----------------------------------------------------------------------------
+# Loaded and validated by src/finskill_eval/config.py (pydantic).
+# DECISIONS and THRESHOLDS only. NO secrets (those come from env / .env).
+# Every numeric threshold is a deliberate, human-ratified choice (see Part A).
+# =============================================================================
+
+meta:
+  project: finskill-eval
+  config_version: 1
+  # A6 complete: FAITH 4-type, Finance Agent Benchmark $3.78/$25.66, and
+  # Anthropic <=8-skills + description-drives-selection re-verified vs primary
+  # sources on 2026-05-26.
+  citations_reverified: true
+
+# -----------------------------------------------------------------------------
+# Reproducibility pins. config.py FAILS LOUDLY if either is left as a
+# REPLACE_WITH_* placeholder.
+# -----------------------------------------------------------------------------
+pins:
+  # Pinned dated snapshot preferred. 'claude-sonnet-4-6' chosen for batch eval
+  # (strong + ~5x cheaper than Opus). Refine to a dated snapshot when confirmed.
+  model_snapshot: "claude-sonnet-4-6"
+  # daloopa/investing main @ 2026-05-22, reviewed by hand in Part A4.
+  skill_repo_sha: "17039332eb6f9323d8415156f7202feef538a3f2"
+
+# -----------------------------------------------------------------------------
+# Tolerance schema (Part A3). rel = |pred - truth| / max(|truth|, abs_floor),
+# absolute-error fallback when |truth| < near_zero_floor. compare() checks
+# tightest-first; first band containing rel-err wins; above largest = overflow.
+# status: PASS counts toward pass-rate; WARN surfaced not passed; FLAG manual.
+# -----------------------------------------------------------------------------
+tolerance:
+  near_zero_floor: 1.0e-9
+  abs_floor: 1.0e-9
+  bands:
+    - name: exact
+      max_rel: 0.0
+      status: PASS
+    - name: tight
+      max_rel: 0.001
+      status: PASS
+    - name: xvendor_standard
+      max_rel: 0.005
+      status: PASS
+    - name: xvendor_liberal
+      max_rel: 0.01
+      status: PASS
+    - name: materiality
+      max_rel: 0.05
+      status: WARN
+  overflow_band:
+    name: disagreement
+    status: FLAG
+
+# -----------------------------------------------------------------------------
+# Success targets (Part A2).
+# -----------------------------------------------------------------------------
+targets:
+  activation_rate_min: 0.95
+  selection_accuracy_min: 0.98
+  accuracy_pass_rate_min: 0.90
+  accuracy_eval_band: xvendor_liberal
+  production_acceptable_pass_rate: 0.85
+  production_acceptable_band: xvendor_liberal
+
+# -----------------------------------------------------------------------------
+# Cost / latency reference points (Finance Agent Benchmark). Flags, not limits.
+# -----------------------------------------------------------------------------
+budgets:
+  cost_per_run_warn_usd: 3.78
+  latency_p95_warn_s: 186
+  cost_per_run_hard_cap_usd: 15.0
+
+# -----------------------------------------------------------------------------
+# Skills under test (Part A2).
+# -----------------------------------------------------------------------------
+skills:
+  under_test:
+    - tearsheet
+    - comps
+    - capital_allocation
+  data_sources:
+    - daloopa
+    - fmp
+  max_skills_per_request: 8
+
+# -----------------------------------------------------------------------------
+# Headless Claude Code invocation (M3).
+# -----------------------------------------------------------------------------
+invocation:
+  bare: true
+  output_format: json
+  allowed_tools:
+    - Read
+    - Bash
+    - Write
+  max_turns: 25
+  timeout_s: 600
+  live_smoke_env_flag: FINSKILL_ALLOW_LIVE
+
+# -----------------------------------------------------------------------------
+# Ground-truth sources (M4). Daloopa delayed -> bootstrap_gold active for M1-M5.
+# -----------------------------------------------------------------------------
+ground_truth:
+  gold: daloopa
+  anchor: sec_xbrl
+  candidate: fmp
+  bootstrap_gold: sec_xbrl
+  snapshots:
+    enabled: true
+    dir: data/snapshots
+    freeze_on_first_pull: true
+  fmp:
+    base_url: "https://financialmodelingprep.com/stable/"
+    rate_limit_rps: 1.5
+    max_retries: 4
+    denomination_sanity_check: true
+  sec_xbrl:
+    # EDGAR requires a descriptive User-Agent with contact info.
+    # PENDING Part A7: replace with the contact you choose.
+    user_agent: "REPLACE_WITH_NAME_AND_EMAIL"
+    company_facts_url: "https://data.sec.gov/api/xbrl/companyfacts/"
+  daloopa:
+    request_scope: read_only
+
+# -----------------------------------------------------------------------------
+# Parallel grid execution (M5).
+# -----------------------------------------------------------------------------
+execution:
+  max_concurrency: 6
+  resume: true
+  global_fmp_rps: 1.5
+  results_dir: results
+
+# -----------------------------------------------------------------------------
+# Reporting (M5/M6). FAITH 4-type cell_type axis.
+# -----------------------------------------------------------------------------
+reporting:
+  formats: [json, markdown, html]
+  breakdowns:
+    - by_skill
+    - by_ticker
+    - by_cell_type
+    - by_tolerance_band
+  list_flag_cells: true
+  emit_interpretation_notes: true
+
+# -----------------------------------------------------------------------------
+# Description-optimization loop (M7, optional).
+# -----------------------------------------------------------------------------
+optimization:
+  enabled: false
+  train_test_split: 0.6
+  runs_per_query: 3
+  max_iterations: 5
+  select_by: test_score
+  optimize_targets:
+    - description
+    - disclosure_structure

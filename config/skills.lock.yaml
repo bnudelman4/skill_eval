@@ -1,0 +1,30 @@
+# =============================================================================
+# skills.lock.yaml  --  pinned skill provenance (Part A4)
+# -----------------------------------------------------------------------------
+# Treated like a dependency lockfile. The repo SHA below was reviewed BY HAND
+# (every SKILL.md + bundled script) before any executable use. Re-review on bump.
+# =============================================================================
+
+repo:
+  url: "https://github.com/daloopa/investing"
+  ref: main
+  sha: "17039332eb6f9323d8415156f7202feef538a3f2"
+  reviewed_date: "2026-05-26"
+  reviewed_by: "gifts.hauls@gmail.com"
+  # Set true only after the manual A4 read is fully complete.
+  manual_review_complete: false
+
+shared_refs:
+  - ".claude/skills/data-access.md"
+  - ".claude/skills/design-system.md"
+
+skills:
+  tearsheet:
+    skill_md: ".claude/skills/tearsheet/SKILL.md"
+    allowed_tools: null        # fill from frontmatter during A4 read
+  comps:
+    skill_md: ".claude/skills/comps/SKILL.md"
+    allowed_tools: null
+  capital_allocation:
+    skill_md: ".claude/skills/capital-allocation/SKILL.md"
+    allowed_tools: null

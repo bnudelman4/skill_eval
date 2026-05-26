@@ -1,0 +1,47 @@
+# =============================================================================
+# universe.yaml  --  evaluation grid (Part A2)
+# -----------------------------------------------------------------------------
+# 8 clean large-caps x last 4 COMPLETED fiscal years (annual), as of 2026-05-26.
+# Calendar-year filers' FY2025 10-Ks were filed ~Feb 2026, so "last 4" =
+# FY2022..FY2025. fiscal_year_end_month flags off-calendar names (AAPL Sep,
+# PG Jun, WMT Jan) -- their FYxxxx label refers to the year the period ENDS in.
+# cik is the zero-padded SEC CIK for EDGAR company-facts lookups (M4).
+# =============================================================================
+
+periods:
+  kind: annual
+  fiscal_years: [2022, 2023, 2024, 2025]
+
+tickers:
+  - symbol: AAPL
+    name: Apple Inc.
+    cik: "0000320193"
+    fiscal_year_end_month: 9
+  - symbol: MSFT
+    name: Microsoft Corporation
+    cik: "0000789019"
+    fiscal_year_end_month: 6
+  - symbol: GOOGL
+    name: Alphabet Inc.
+    cik: "0001652044"
+    fiscal_year_end_month: 12
+  - symbol: JPM
+    name: JPMorgan Chase & Co.
+    cik: "0000019617"
+    fiscal_year_end_month: 12
+  - symbol: JNJ
+    name: Johnson & Johnson
+    cik: "0000200406"
+    fiscal_year_end_month: 12
+  - symbol: PG
+    name: The Procter & Gamble Company
+    cik: "0000080424"
+    fiscal_year_end_month: 6
+  - symbol: KO
+    name: The Coca-Cola Company
+    cik: "0000021344"
+    fiscal_year_end_month: 12
+  - symbol: WMT
+    name: Walmart Inc.
+    cik: "0000104169"
+    fiscal_year_end_month: 1
