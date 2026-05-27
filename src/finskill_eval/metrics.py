@@ -157,3 +157,46 @@ def aggregate(
             "accuracy_pass": accuracy_pass_rate >= accuracy_min,
         },
     )
+
+
+# --------------------------------------------------------------------------- #
+# Per-skill effect size (M7 / friend's point): surface per-skill deltas with a
+# confidence interval, not just an aggregate. Used by the A/B (M6) and the
+# before/after optimization report (M7).
+# --------------------------------------------------------------------------- #
+import math
+
+
+@dataclass
+class EffectSize:
+    n: int
+    mean_delta: float       # mean of paired (variant - baseline)
+    sd: float               # sample std dev of the deltas
+    ci95_low: float
+    ci95_high: float
+    cohens_d: float         # mean_delta / sd (paired)
+
+    @property
+    def significant(self) -> bool:
+        """95% CI excludes zero -> the delta is unlikely to be noise."""
+        return self.ci95_low > 0.0 or self.ci95_high < 0.0
+
+
+def effect_size(deltas: list[float]) -> EffectSize:
+    """Paired effect size for a list of (variant - baseline) deltas.
+
+    Uses a normal approximation for the 95% CI (1.96 * SE). For small n this is
+    approximate; the CI is a guide for 'is this real', not a hypothesis test.
+    """
+    n = len(deltas)
+    if n == 0:
+        return EffectSize(0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    mean = sum(deltas) / n
+    if n == 1:
+        return EffectSize(1, mean, 0.0, mean, mean, 0.0)
+    var = sum((d - mean) ** 2 for d in deltas) / (n - 1)
+    sd = math.sqrt(var)
+    se = sd / math.sqrt(n)
+    half = 1.96 * se
+    d = mean / sd if sd > 0 else 0.0
+    return EffectSize(n, mean, sd, mean - half, mean + half, d)

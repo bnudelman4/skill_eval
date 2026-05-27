@@ -169,6 +169,11 @@ class Optimization(_Strict):
     max_iterations: int = Field(gt=0)
     select_by: str
     optimize_targets: list[str]
+    # M7 / SkillOpt guardrails (defaults keep existing configs valid)
+    max_edits_per_step: int = Field(default=6, ge=1, le=20)
+    description_token_cap: int = Field(default=920, gt=0)
+    accuracy_nonregression_guard: bool = True
+    protected_sections: bool = True
 
 
 class Settings(_Strict):

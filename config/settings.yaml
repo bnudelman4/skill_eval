@@ -158,3 +158,9 @@ optimization:
   optimize_targets:
     - description
     - disclosure_structure
+  # SkillOpt guardrails: bounded diffs, compact descriptions, body protected,
+  # and accuracy may not regress while chasing activation/selection gains.
+  max_edits_per_step: 6          # SkillOpt: 4-8 edits/step is the sweet spot
+  description_token_cap: 920     # compactness; Anthropic hard limit is 1024 chars
+  accuracy_nonregression_guard: true
+  protected_sections: true
