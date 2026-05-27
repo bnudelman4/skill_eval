@@ -63,6 +63,7 @@ def run_baseline(
     tickers: list[str] | None = None,
     periods: list[str] | None = None,
     data_sources: list[str] | None = None,
+    parse_fn=None,
 ) -> tuple[Metrics, dict]:
     settings = load_settings()
     results_dir = Path(results_dir or settings.execution.results_dir)
@@ -74,6 +75,10 @@ def run_baseline(
         data_sources = data_sources or ["fmp"]
         invoke_fn = _fixture_invoke
         ground_truth = _FixtureGroundTruth()
+        # dry-run uses the deterministic parser on known fixtures (no live LLM)
+        if parse_fn is None:
+            from finskill_eval.parse_xlsx import parse as _pp
+            parse_fn = lambda path, skill, ticker: _pp(path, skill=skill, ticker=ticker)
     else:
         from dotenv import load_dotenv
 
@@ -98,6 +103,9 @@ def run_baseline(
                 timeout=settings.invocation.timeout_s,
                 allowed_tools=settings.invocation.allowed_tools,
                 bare=settings.invocation.bare,
+                # Max subscription auth: avoids the 30k-input-TPM metered cap that
+                # blocks token-heavy skill runs (verified in Step 0). No metered $.
+                use_subscription=True,
             )
 
     grid = [
@@ -110,7 +118,7 @@ def run_baseline(
     def score_fn(sample: GridSample) -> SampleRecord:
         return score_sample(
             sample, invoke_fn=invoke_fn, ground_truth=ground_truth,
-            workdir_root=workdir_root,
+            workdir_root=workdir_root, parse_fn=parse_fn,
         )
 
     records = run_grid(

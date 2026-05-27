@@ -56,9 +56,12 @@ def test_score_sample_happy_path(tmp_path):
             activation_observed=True, skill_selected="tearsheet",
         )
 
+    from finskill_eval.parse_xlsx import parse as parse_xlsx
     rec = score_sample(
         sample, invoke_fn=fake_invoke, ground_truth=MockGT(CONTRACT),
         workdir_root=tmp_path,
+        # deterministic parser on the known fixture (avoid a live LLM extract)
+        parse_fn=lambda path, skill, ticker: parse_xlsx(path, skill=skill, ticker=ticker),
     )
     assert rec.exit_ok is True
     assert rec.activation_observed is True

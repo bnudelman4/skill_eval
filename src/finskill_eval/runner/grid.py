@@ -12,8 +12,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
+from finskill_eval.extract.llm_extract import extract_ledger
 from finskill_eval.groundtruth.base import GroundTruthSource
-from finskill_eval.parse_xlsx import parse as parse_xlsx
+from finskill_eval.parse_xlsx import parse as parse_xlsx  # legacy/deterministic option
 from finskill_eval.runner.invoke_skill import SkillRun
 from finskill_eval.verify import verify
 
@@ -90,7 +91,10 @@ def score_sample(
     workdir_root: Path,
     parse_fn: Optional[ParseFn] = None,
 ) -> SampleRecord:
-    parse_fn = parse_fn or (lambda path, skill, ticker: parse_xlsx(path, skill=skill, ticker=ticker))
+    # Default ingestion is Option C (LLM extraction): robust to free-form skill
+    # layouts with no per-layout code. parse_xlsx remains injectable as the
+    # deterministic fallback. Tests inject their own parse_fn.
+    parse_fn = parse_fn or (lambda path, skill, ticker: extract_ledger(path, skill=skill, ticker=ticker))
     workdir = Path(workdir_root) / sample.sample_id
 
     run = invoke_fn(
