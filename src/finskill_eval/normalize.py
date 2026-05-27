@@ -77,6 +77,15 @@ def _four_digit_year(token: str) -> int:
     return 2000 + n if n < 100 else n
 
 
+# calendar month abbrev -> calendar quarter (consistent key for matrix columns)
+_MONTH_Q = {
+    "jan": 1, "feb": 1, "mar": 1,
+    "apr": 2, "may": 2, "jun": 2,
+    "jul": 3, "aug": 3, "sep": 3,
+    "oct": 4, "nov": 4, "dec": 4,
+}
+
+
 def normalize_period(raw: object) -> Optional[Period]:
     if raw is None:
         return None
@@ -87,6 +96,17 @@ def normalize_period(raw: object) -> Optional[Period]:
     mq = re.fullmatch(r"[Qq]([1-4])\s*[- ]?\s*(\d{2,4})", s)
     if mq:
         return Period("quarterly", _four_digit_year(mq.group(2)), int(mq.group(1)))
+
+    # "FY2023 Q1" / "FY23 Q1"
+    mfyq = re.fullmatch(r"(?:FY|fy)\s*(\d{2,4})\s*[Qq]([1-4])", s)
+    if mfyq:
+        return Period("quarterly", _four_digit_year(mfyq.group(1)), int(mfyq.group(2)))
+
+    # "Dec'22" / "Sep 24" / "Mar'2023" — calendar month + year -> calendar quarter
+    mmon = re.fullmatch(r"([A-Za-z]{3,9})\s*['’]?\s*(\d{2,4})", s)
+    if mmon and mmon.group(1).lower()[:3] in _MONTH_Q:
+        q = _MONTH_Q[mmon.group(1).lower()[:3]]
+        return Period("quarterly", _four_digit_year(mmon.group(2)), q)
 
     mfy = re.fullmatch(r"(?:FY|fy)?\s*(\d{2,4})", s)
     if mfy:

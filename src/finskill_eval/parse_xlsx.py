@@ -64,46 +64,101 @@ def _faith_cell_type(kind: str, formula: str | None, n_inputs: int) -> str:
     return "bivariate"  # two distinct metrics
 
 
-def parse(path: str | Path, *, skill: str, ticker: str) -> Ledger:
-    wb = load_workbook(Path(path), data_only=True)
-    ws = wb.active
+def _safe_period(raw: object):
+    """normalize_period but tolerant: unparseable -> None instead of raising,
+    so one odd cell never crashes a whole multi-sheet workbook."""
+    try:
+        return normalize_period(raw)
+    except ValueError:
+        return None
 
+
+_PCT_RATIO_LABEL = re.compile(r"%|percent|margin|yield|ratio|growth|change|rate")
+_MILLIONS = re.compile(r"million|\$mm|\(\$m\)|\$ m\b", re.IGNORECASE)
+
+
+def _sheet_unit(ws) -> str:
+    """Infer a sheet-wide value unit from its title / header text."""
+    blob = " ".join(
+        str(c) for row in ws.iter_rows(min_row=1, max_row=3, values_only=True)
+        for c in row if c is not None
+    )
+    return "$mm" if _MILLIONS.search(blob) else ""
+
+
+def _find_matrix_header(ws):
+    """Return (row_idx, {col_idx: period_raw}) if a header row has >=2 columns
+    that parse as periods; else None. Scans the first several rows."""
+    rows = list(ws.iter_rows(min_row=1, max_row=8, values_only=True))
+    for i, row in enumerate(rows):
+        periods = {
+            j: str(c)
+            for j, c in enumerate(row)
+            if j >= 1 and c is not None and _safe_period(c) is not None
+        }
+        if len(periods) >= 2:
+            return i, periods
+    return None
+
+
+def _extract_matrix(ws, header_row: int, periods: dict, sheet_unit: str) -> list[dict]:
+    out: list[dict] = []
+    rows = list(ws.iter_rows(values_only=True))
+    for row in rows[header_row + 1:]:
+        if not row or row[0] is None or str(row[0]).strip() == "":
+            continue
+        label = str(row[0])
+        unit = "" if _PCT_RATIO_LABEL.search(label.lower()) else sheet_unit
+        for col, period_raw in periods.items():
+            if col >= len(row):
+                continue
+            val = row[col]
+            if val is None or str(val).strip() == "":
+                continue
+            out.append({"label": label, "period_raw": period_raw,
+                        "value_raw": val, "unit": unit})
+    return out
+
+
+def _extract_row_oriented(ws) -> list[dict]:
     label_fill = period_fill = unit_fill = ""
-    raw_cells: list[dict] = []
+    out: list[dict] = []
     for row in ws.iter_rows(values_only=True):
-        # pad to 4 columns: Metric | Period | Value | Unit
         cols = list(row) + [None] * (4 - len(row))
         metric, period_raw, value_raw, unit_raw = cols[:4]
-
-        # skip blank/header rows BEFORE forward-fill, so header tokens
-        # ("Period", "Unit") never pollute the carried-down values
         if value_raw is None or str(value_raw).strip() == "":
             continue
-        if str(value_raw).strip().lower() == "value":  # header row
+        if str(value_raw).strip().lower() == "value":
             continue
-
-        # forward-fill descriptive columns (merged-cell robustness)
         if metric not in (None, ""):
             label_fill = str(metric)
         if period_raw not in (None, ""):
             period_fill = str(period_raw)
         if unit_raw not in (None, ""):
             unit_fill = str(unit_raw)
+        out.append({"label": label_fill, "period_raw": period_fill,
+                    "value_raw": value_raw, "unit": unit_fill})
+    return out
 
-        raw_cells.append(
-            {
-                "label": label_fill,
-                "period_raw": period_fill,
-                "value_raw": value_raw,
-                "unit": unit_fill,
-            }
-        )
+
+def parse(path: str | Path, *, skill: str, ticker: str) -> Ledger:
+    wb = load_workbook(Path(path), data_only=True)
+
+    raw_cells: list[dict] = []
+    for ws in wb.worksheets:
+        matrix = _find_matrix_header(ws)
+        if matrix is not None:
+            header_row, periods = matrix
+            raw_cells += _extract_matrix(ws, header_row, periods, _sheet_unit(ws))
+        else:
+            raw_cells += _extract_row_oriented(ws)
 
     cells: list[Cell] = []
     by_label_period: dict[tuple[str, str | None], str] = {}
+    seen_ids: set[str] = set()
     for rc in raw_cells:
         canonical = normalize_label(rc["label"])
-        period = normalize_period(rc["period_raw"])
+        period = _safe_period(rc["period_raw"])
         pkey = period_key(period)
         num = normalize_number(rc["value_raw"])
         unit = rc["unit"]
@@ -117,6 +172,9 @@ def parse(path: str | Path, *, skill: str, ticker: str) -> Ledger:
 
         kind = _classify_kind(canonical, unit, is_numeric)
         cell_id = f"{canonical}__{pkey}" if pkey else canonical
+        if cell_id in seen_ids:
+            continue  # same metric repeated across sheets -> keep first
+        seen_ids.add(cell_id)
         cells.append(
             Cell(
                 cell_id=cell_id,
