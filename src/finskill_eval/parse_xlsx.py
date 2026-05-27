@@ -34,6 +34,12 @@ UNIT_SCALE: dict[str, float] = {
     "$k": 1_000.0,
     "%": 1.0,
     "x": 1.0,
+    # canonical absolute units emitted by the LLM extractor (already absolute)
+    "usd": 1.0,
+    "USD": 1.0,
+    "percent": 1.0,
+    "shares": 1.0,
+    "ratio": 1.0,
     "": 1.0,
 }
 
@@ -153,6 +159,13 @@ def parse(path: str | Path, *, skill: str, ticker: str) -> Ledger:
         else:
             raw_cells += _extract_row_oriented(ws)
 
+    return build_ledger(raw_cells, skill=skill, ticker=ticker)
+
+
+def build_ledger(raw_cells: list[dict], *, skill: str, ticker: str) -> Ledger:
+    """Normalize + classify + wire a list of {label, period_raw, value_raw, unit}
+    records into a Ledger. Shared by the xlsx parser and the LLM extractor so
+    both feed the identical downstream pipeline."""
     cells: list[Cell] = []
     by_label_period: dict[tuple[str, str | None], str] = {}
     seen_ids: set[str] = set()
