@@ -174,3 +174,23 @@ def test_verifier_accepts_real_source_returning_value_objects():
     v = report.verdicts[0]
     assert v.status == "PASS"
     assert v.band == "exact"
+
+
+_TICKER_MAP = {
+    "0": {"cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc."},
+    "1": {"cik_str": 789019, "ticker": "MSFT", "title": "Microsoft Corp"},
+}
+
+
+def test_sec_resolves_cik_from_ticker_map():
+    # no cik_lookup -> must resolve via company_tickers.json
+    c = SECXBRLClient(user_agent="ua", fetch=_sec_fetch,
+                      tickers_fetch=lambda: _TICKER_MAP)
+    v = c.get("AAPL", "FY2024", "revenue")
+    assert v.value == pytest.approx(391035000000.0)
+
+
+def test_sec_unknown_ticker_returns_none():
+    c = SECXBRLClient(user_agent="ua", fetch=_sec_fetch,
+                      tickers_fetch=lambda: _TICKER_MAP)
+    assert c.get("ZZZZ", "FY2024", "revenue") is None

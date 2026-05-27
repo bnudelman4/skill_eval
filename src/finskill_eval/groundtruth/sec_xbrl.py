@@ -54,12 +54,42 @@ class SECXBRLClient:
         user_agent: str,
         cik_lookup: Optional[dict[str, str]] = None,
         company_facts_url: str = "https://data.sec.gov/api/xbrl/companyfacts/",
+        tickers_url: str = "https://www.sec.gov/files/company_tickers.json",
         fetch: Optional[Fetch] = None,
+        tickers_fetch: Optional[Callable[[], dict]] = None,
     ):
         self._ua = user_agent
-        self._cik = cik_lookup or {}
+        self._cik = dict(cik_lookup or {})
         self._url = company_facts_url
+        self._tickers_url = tickers_url
         self._fetch = fetch or self._default_fetch
+        self._tickers_fetch = tickers_fetch or self._default_tickers_fetch
+        self._tickers_loaded = False
+
+    def _resolve_cik(self, ticker: str) -> Optional[str]:
+        """Ticker -> 10-digit zero-padded CIK. Explicit cik_lookup wins; else
+        lazily load + cache SEC's company_tickers.json mapping."""
+        t = ticker.upper()
+        if t in self._cik:
+            return self._cik[t]
+        if not self._tickers_loaded:
+            try:
+                data = self._tickers_fetch()
+            except Exception:
+                data = {}
+            for row in (data.values() if isinstance(data, dict) else data):
+                sym = str(row.get("ticker", "")).upper()
+                if sym:
+                    self._cik.setdefault(sym, str(row["cik_str"]).zfill(10))
+            self._tickers_loaded = True
+        return self._cik.get(t)
+
+    def _default_tickers_fetch(self) -> dict:
+        import httpx
+
+        resp = httpx.get(self._tickers_url, headers={"User-Agent": self._ua}, timeout=30.0)
+        resp.raise_for_status()
+        return resp.json()
 
     def get(
         self, ticker: str, period: Optional[str], canonical_label: str
@@ -70,7 +100,7 @@ class SECXBRLClient:
         fy = _fiscal_year(period or "")
         if fy is None:
             return None
-        cik = self._cik.get(ticker)
+        cik = self._resolve_cik(ticker)
         if cik is None:
             return None
 
