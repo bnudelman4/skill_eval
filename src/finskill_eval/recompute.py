@@ -127,7 +127,12 @@ def recompute(
                 missing = True
                 break
             args.append(float(src.value))
-        if missing:
-            continue  # can't recompute without all inputs -> skip
-        out[cell.cell_id] = fn(*args)
+        if missing or not args:
+            continue  # no/insufficient inputs wired -> can't recompute -> skip
+        try:
+            out[cell.cell_id] = fn(*args)
+        except TypeError:
+            if strict:
+                raise
+            continue  # formula arity mismatch (partial inputs) -> skip
     return out

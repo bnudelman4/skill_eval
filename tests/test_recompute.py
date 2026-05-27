@@ -68,3 +68,17 @@ def test_recompute_resolves_inputs_from_ledger():
     out = recompute(led)
     assert set(out) == {"gm"}
     assert math.isclose(out["gm"], 46.206349815233935, rel_tol=1e-9)
+
+
+def test_recompute_skips_derived_with_unwired_inputs():
+    """A derived cell whose inputs weren't found (empty/partial) must be skipped
+    in lenient mode, not crash with an arity error."""
+    from finskill_eval.ledger import Cell, Ledger
+    from finskill_eval.recompute import recompute
+    led = Ledger(skill="t", ticker="AAPL", cells=[
+        Cell(cell_id="pe_ratio__FY2024", label="P/E", canonical_label="pe_ratio",
+             period=None, raw_value="30", value=30.0, unit="x", kind="derived",
+             formula="pe_ratio", inputs=()),   # inputs never wired
+    ])
+    out = recompute(led)            # lenient: must not raise
+    assert "pe_ratio__FY2024" not in out
