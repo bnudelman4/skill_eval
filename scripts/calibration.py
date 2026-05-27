@@ -36,7 +36,7 @@ lines = ["# Step 0 — Verifier Catch-Rate Calibration", "",
          f"(SEC has no value) are excluded.", ""]
 grand = {"covered": 0, "pass": 0, "caught": 0, "cost": 0.0}
 
-MAX_TRIES = 2  # transient exit_ok=False -> retry (runs are nondeterministic)
+MAX_TRIES = 3  # transient exit_ok=False (socket drops) -> retry
 
 for skill in SKILLS:
     print(f"\n=== {skill} {TICKER} {PERIOD} (fmp) ===", flush=True)
@@ -48,6 +48,7 @@ for skill in SKILLS:
             model=S.pins.model_snapshot, timeout=900,
             allowed_tools=S.invocation.allowed_tools, bare=S.invocation.bare,
             skill_src_dir=Path("skills/fmp") / skill,
+            use_subscription=True,   # Max auth: no metered $, no 30k-TPM cap
         )
         grand["cost"] += run.cost_usd
         print(f"  try{attempt}: cost=${run.cost_usd:.4f} latency={run.latency_s:.0f}s "

@@ -129,10 +129,12 @@ def parse_activation(log: str, intended_skill: str) -> tuple[bool, Optional[str]
 TIMEOUT_RETURNCODE = 124  # conventional timeout exit code
 
 
-def _default_runner(cmd: list[str], cwd: str, timeout: Optional[int]) -> ProcResult:
+def _default_runner(
+    cmd: list[str], cwd: str, timeout: Optional[int], env: Optional[dict] = None
+) -> ProcResult:
     try:
         proc = subprocess.run(
-            cmd, cwd=cwd, timeout=timeout, capture_output=True, text=True
+            cmd, cwd=cwd, timeout=timeout, capture_output=True, text=True, env=env
         )
     except subprocess.TimeoutExpired as exc:
         # A slow run must not crash the batch: surface partial output + a marker
@@ -166,11 +168,17 @@ def run_skill(
     output_format: str = "json",
     runner: Optional[Runner] = None,
     skill_src_dir: Optional[Path] = None,
+    use_subscription: bool = False,
 ) -> SkillRun:
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     runner = runner or _default_runner
     tools = allowed_tools or ["Read", "Bash", "Write"]
+    # Subscription (Max) auth: drop --bare and strip the metered API key so the
+    # CLI falls back to the logged-in Max account (no per-token $, no 30k-TPM
+    # metered cap). Trade-off: loses --bare's clean-room reproducibility.
+    if use_subscription:
+        bare = False
 
     # Stage the skill into the isolated workdir so --bare (which skips ~/.claude
     # auto-discovery) can still load it. The skill dir name becomes its trigger.
@@ -189,7 +197,12 @@ def run_skill(
     )
 
     t0 = time.monotonic()
-    proc = runner(cmd, str(workdir), timeout)
+    if runner is _default_runner and use_subscription:
+        import os
+        sub_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+        proc = runner(cmd, str(workdir), timeout, sub_env)
+    else:
+        proc = runner(cmd, str(workdir), timeout)
     latency_s = time.monotonic() - t0
 
     raw_log = workdir / "run.log"
