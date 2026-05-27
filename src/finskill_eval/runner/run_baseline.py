@@ -64,6 +64,7 @@ def run_baseline(
     periods: list[str] | None = None,
     data_sources: list[str] | None = None,
     parse_fn=None,
+    concurrency: int | None = None,
 ) -> tuple[Metrics, dict]:
     settings = load_settings()
     results_dir = Path(results_dir or settings.execution.results_dir)
@@ -123,7 +124,7 @@ def run_baseline(
 
     records = run_grid(
         grid, score_fn,
-        concurrency=settings.execution.max_concurrency,
+        concurrency=concurrency or settings.execution.max_concurrency,
         global_rps=settings.execution.global_fmp_rps,
         resume=settings.execution.resume,
         results_dir=results_dir / "samples",
