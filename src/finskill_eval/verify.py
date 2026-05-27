@@ -175,8 +175,10 @@ def verify(
             )
             continue
         r, factor = _compare_scaled(float(cell.value), float(truth), b)
-        note = (None if factor == 1.0
-                else f"scale-normalized x{factor:g} (display-unit vs gold, not a value error)")
+        # Only call it a scale/display difference if the factor actually landed
+        # it in a PASS band; otherwise it's a genuine disagreement, no note.
+        note = (f"scale-normalized x{factor:g} (display-unit vs gold, not a value error)"
+                if factor != 1.0 and r.status == "PASS" else None)
         verdicts.append(
             CellVerdict(
                 cell.cell_id, cell.canonical_label, pkey, cell.kind, cell.cell_type,
