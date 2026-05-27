@@ -33,6 +33,11 @@ def growth(current: float, prior: float) -> float:
     return (current - prior) / prior * 100.0
 
 
+def ebitda_margin(ebitda: float, revenue: float) -> float:
+    """EBITDA margin % = EBITDA / revenue * 100."""
+    return ebitda / revenue * 100.0
+
+
 def ev_ebitda(enterprise_value: float, ebitda: float) -> float:
     """EV/EBITDA multiple = enterprise value / EBITDA."""
     return enterprise_value / ebitda
@@ -55,6 +60,7 @@ FORMULAS: dict[str, Callable[..., float]] = {
     "operating_margin": operating_margin,
     "net_margin": net_margin,
     "growth": growth,
+    "ebitda_margin": ebitda_margin,
     "ev_ebitda": ev_ebitda,
     "pe_ratio": pe_ratio,
     "shareholder_yield": shareholder_yield,
@@ -67,6 +73,7 @@ METRIC_DEFS: dict[str, tuple[str, tuple[str, ...]]] = {
     "gross_margin": ("gross_margin", ("gross_profit", "revenue")),
     "operating_margin": ("operating_margin", ("operating_income", "revenue")),
     "net_margin": ("net_margin", ("net_income", "revenue")),
+    "ebitda_margin": ("ebitda_margin", ("ebitda", "revenue")),
     "ev_ebitda": ("ev_ebitda", ("enterprise_value", "ebitda")),
     "pe_ratio": ("pe_ratio", ("price", "eps")),
     "shareholder_yield": (
@@ -77,34 +84,50 @@ METRIC_DEFS: dict[str, tuple[str, tuple[str, ...]]] = {
 
 
 def recompute(
-    ledger: Ledger, inputs: Optional[dict[str, float]] = None
+    ledger: Ledger, inputs: Optional[dict[str, float]] = None, *, strict: bool = False
 ) -> dict[str, float]:
     """Recompute every derived cell. Returns {cell_id: recomputed_value}.
 
     Input values resolve from the named input cells in the ledger; the optional
     `inputs` dict overrides/supplies values by cell_id (e.g. external market
     data not present as a cell).
+
+    Lenient by default: a derived cell that cannot be recomputed (no registered
+    formula, unknown formula, or a missing/non-numeric input) is SKIPPED, not
+    fatal — real skills emit derived metrics we haven't registered, and verify()
+    falls back to comparing those against gold directly. Pass strict=True to
+    raise instead (used where every derived cell is expected to be computable).
     """
     overrides = inputs or {}
     out: dict[str, float] = {}
     for cell in ledger.cells:
         if cell.kind != "derived":
             continue
-        if not cell.formula:
-            raise ValueError(f"derived cell {cell.cell_id} has no formula")
-        fn = FORMULAS.get(cell.formula)
+        fn = FORMULAS.get(cell.formula) if cell.formula else None
         if fn is None:
-            raise ValueError(f"unknown formula {cell.formula!r} on {cell.cell_id}")
+            if strict:
+                raise ValueError(
+                    f"derived cell {cell.cell_id} has no usable formula "
+                    f"({cell.formula!r})"
+                )
+            continue  # unregistered/unknown derived metric -> skip recompute
         args: list[float] = []
+        missing = False
         for input_id in cell.inputs:
             if input_id in overrides:
                 args.append(overrides[input_id])
                 continue
             src = ledger.by_id(input_id)
             if src is None or not isinstance(src.value, (int, float)):
-                raise ValueError(
-                    f"derived cell {cell.cell_id} input {input_id!r} missing or non-numeric"
-                )
+                if strict:
+                    raise ValueError(
+                        f"derived cell {cell.cell_id} input {input_id!r} "
+                        f"missing or non-numeric"
+                    )
+                missing = True
+                break
             args.append(float(src.value))
+        if missing:
+            continue  # can't recompute without all inputs -> skip
         out[cell.cell_id] = fn(*args)
     return out

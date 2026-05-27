@@ -27,8 +27,10 @@ def _setup(tmp_path):
 
 def _good_run_fn(doc: SkillDoc, q: Query) -> RunObs:
     act = 0.95 if "trigger" in doc.description else 0.2
+    import hashlib
     import random
-    r = random.Random(hash((doc.description, q.prompt)) & 0xFFFF).random()
+    seed = int(hashlib.sha256(f"{doc.description}|{q.prompt}".encode()).hexdigest(), 16) & 0xFFFF
+    r = random.Random(seed).random()
     on = r < act
     return RunObs(on, "comps" if on else None, 0.95)
 

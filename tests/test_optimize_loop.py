@@ -40,10 +40,14 @@ def test_split_is_deterministic_and_proportioned():
 def _run_fn_factory(good_marker: str, base_act: float, good_act: float):
     """Activation depends on whether the description contains good_marker.
     accuracy_passrate fixed high (body frozen)."""
+    import hashlib
     import random as _r
 
+    def _seed(*parts) -> int:
+        return int(hashlib.sha256("|".join(parts).encode()).hexdigest(), 16) & 0xFFFF
+
     def run_fn(doc: SkillDoc, q: Query) -> RunObs:
-        rng = _r.Random(hash((doc.description, q.prompt)) & 0xFFFF)
+        rng = _r.Random(_seed(doc.description, q.prompt))
         p = good_act if good_marker in doc.description else base_act
         activated = rng.random() < p
         return RunObs(activated=activated,

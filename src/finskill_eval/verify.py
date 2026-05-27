@@ -76,6 +76,21 @@ def _arithmetic_threshold(bands: Bands, band_name: str) -> float:
     raise ValueError(f"arithmetic band {band_name!r} not found in schema")
 
 
+# Skills display $ in millions/thousands while gold (SEC) is absolute. Try clean
+# powers of ten; a factor that lands in a PASS band is a display-unit difference,
+# not a value error. A genuinely wrong number matches no factor and still fails.
+_SCALE_FACTORS = (1.0, 1e3, 1e6, 1e9, 1e-3, 1e-6, 1e-9)
+
+
+def _compare_scaled(pred: float, truth: float, b: "Bands"):
+    best, best_factor = None, 1.0
+    for f in _SCALE_FACTORS:
+        r = compare(pred * f, truth, bands=b)
+        if best is None or r.rel_err < best.rel_err:
+            best, best_factor = r, f
+    return best, best_factor
+
+
 def verify(
     ledger: Ledger,
     ground_truth: GroundTruthSource,
@@ -159,11 +174,13 @@ def verify(
                 )
             )
             continue
-        r = compare(float(cell.value), float(truth), bands=b)
+        r, factor = _compare_scaled(float(cell.value), float(truth), b)
+        note = (None if factor == 1.0
+                else f"scale-normalized x{factor:g} (display-unit vs gold, not a value error)")
         verdicts.append(
             CellVerdict(
                 cell.cell_id, cell.canonical_label, pkey, cell.kind, cell.cell_type,
-                cell.value, truth, None, r.rel_err, r.band, r.status,
+                cell.value, truth, None, r.rel_err, r.band, r.status, note=note,
             )
         )
 
