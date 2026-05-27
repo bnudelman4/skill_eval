@@ -42,6 +42,11 @@ def _fiscal_year(period: str) -> Optional[int]:
     return int(m.group(1)) if m else None
 
 
+def _end_year(end: Optional[str]) -> Optional[int]:
+    m = re.match(r"(\d{4})-", end or "")
+    return int(m.group(1)) if m else None
+
+
 class SECXBRLClient:
     def __init__(
         self,
@@ -75,16 +80,19 @@ class SECXBRLClient:
             if not entry:
                 continue
             for unit_rows in entry.get("units", {}).values():
-                row = next(
-                    (
-                        r
-                        for r in unit_rows
-                        if r.get("fy") == fy
-                        and r.get("fp") == "FY"
-                        and str(r.get("form", "")).startswith("10-K")
-                    ),
-                    None,
-                )
+                # Select by the DATA period's end-date year, not the filing's
+                # `fy`: one 10-K reports 3 comparative years all tagged with the
+                # filing fy, so fy-matching alone returns the earliest year.
+                # Among matches (restatements across filings) prefer the latest
+                # `filed` (most recently reported value).
+                candidates = [
+                    r
+                    for r in unit_rows
+                    if r.get("fp") == "FY"
+                    and str(r.get("form", "")).startswith("10-K")
+                    and _end_year(r.get("end")) == fy
+                ]
+                row = max(candidates, key=lambda r: r.get("filed", ""), default=None)
                 if row is not None:
                     return Value(
                         value=float(row["val"]),

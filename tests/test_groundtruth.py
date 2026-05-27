@@ -66,8 +66,12 @@ SEC_FACTS = {
             "Revenues": {
                 "units": {
                     "USD": [
+                        # Realistic EDGAR: the FY2024 10-K reports 3 years of
+                        # comparatives, ALL tagged with the filing's fy=2024.
+                        # The data period is distinguished by `end`, not `fy`.
+                        {"end": "2022-09-24", "val": 394328000000, "fy": 2024, "fp": "FY", "form": "10-K"},
+                        {"end": "2023-09-30", "val": 383285000000, "fy": 2024, "fp": "FY", "form": "10-K"},
                         {"end": "2024-09-28", "val": 391035000000, "fy": 2024, "fp": "FY", "form": "10-K"},
-                        {"end": "2023-09-30", "val": 383285000000, "fy": 2023, "fp": "FY", "form": "10-K"},
                         {"end": "2024-06-29", "val": 85000000000, "fy": 2024, "fp": "Q3", "form": "10-Q"},
                     ]
                 }
@@ -101,6 +105,16 @@ def test_sec_ignores_non_annual_form():
 def test_sec_concept_fallback_list():
     c = SECXBRLClient(user_agent="ua", cik_lookup={"AAPL": "0000320193"}, fetch=_sec_fetch)
     assert c.get("AAPL", "FY2024", "net_income").value == pytest.approx(93736000000.0)
+
+
+def test_sec_selects_by_period_end_not_filing_fy():
+    """Regression: comparatives in one 10-K all carry the filing's fy; the
+    client must pick the row whose period END is in the target FY, not the
+    first fy-matching row (which would be the earliest comparative)."""
+    c = SECXBRLClient(user_agent="ua", cik_lookup={"AAPL": "0000320193"}, fetch=_sec_fetch)
+    v = c.get("AAPL", "FY2024", "revenue")
+    assert v.value == pytest.approx(391035000000.0)   # FY2024, not FY2022's 394328
+    assert v.vintage == "2024-09-28"
 
 
 def test_sec_market_metric_is_none():

@@ -125,11 +125,15 @@ def verify(
                 )
                 continue
             if truth is None:
+                # Arithmetic is internally consistent (stated == recompute of its
+                # own inputs) but the gold source has no independent value for
+                # this derived metric -> not gradeable, not a failure.
                 verdicts.append(
                     CellVerdict(
                         cell.cell_id, cell.canonical_label, pkey, cell.kind, cell.cell_type,
                         cell.value, None, recomp, arith.rel_err,
-                        arith.band, "FAIL", note="no ground-truth value",
+                        "no_gold", "SKIP",
+                        note="recompute-consistent; no independent gold value",
                     )
                 )
                 continue
@@ -145,11 +149,13 @@ def verify(
 
         # direct numeric (or derived without wired inputs -> treat as direct)
         if truth is None:
+            # Gold source doesn't cover this metric (e.g. EBITDA/EPS not in XBRL)
+            # -> not gradeable, not a failure. Excluded from pass-rate.
             verdicts.append(
                 CellVerdict(
                     cell.cell_id, cell.canonical_label, pkey, cell.kind, cell.cell_type,
                     cell.value, None, None, None,
-                    "disagreement", "FAIL", note="no ground-truth value",
+                    "no_gold", "SKIP", note="no ground-truth coverage",
                 )
             )
             continue
@@ -165,16 +171,18 @@ def verify(
 
 
 def _rollup(verdicts: list[CellVerdict], band_order: list[str]) -> Rollup:
-    counts = {s: 0 for s in ("PASS", "WARN", "FLAG", "FAIL")}
+    counts = {s: 0 for s in ("PASS", "WARN", "FLAG", "FAIL", "SKIP")}
     band_counts = {name: 0 for name in band_order}
     for v in verdicts:
-        counts[v.status] += 1
+        counts[v.status] = counts.get(v.status, 0) + 1
         band_counts[v.band] = band_counts.get(v.band, 0) + 1
-    total = len(verdicts) or 1
+    # SKIP (no gold coverage) and FLAG (cross-vendor disagreement) are not skill
+    # failures -> excluded from the pass-rate denominator.
+    gradeable = counts["PASS"] + counts["WARN"] + counts["FAIL"]
     return Rollup(
         counts=counts,
         band_counts=band_counts,
-        pass_rate=counts["PASS"] / total,
+        pass_rate=counts["PASS"] / (gradeable or 1),
         failures=[v for v in verdicts if v.status == "FAIL"],
         flags=[v for v in verdicts if v.status == "FLAG"],
         warns=[v for v in verdicts if v.status == "WARN"],

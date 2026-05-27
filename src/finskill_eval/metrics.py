@@ -59,7 +59,7 @@ def pass_rate_at(verdicts: list[dict], band: str, order: list[str] | None = None
 
 
 def _pass_rate_at(verdicts: list[dict], band: str, order: list[str]) -> float:
-    gradeable = [v for v in verdicts if v["status"] != "FLAG"]
+    gradeable = [v for v in verdicts if v["status"] not in ("FLAG", "SKIP")]
     if not gradeable:
         return 0.0
     idx = order.index(band)
@@ -72,7 +72,7 @@ def _pass_rate_at(verdicts: list[dict], band: str, order: list[str]) -> float:
 
 
 def _group_metrics(verdicts: list[dict], band: str, order: list[str]) -> dict:
-    counts = {s: 0 for s in ("PASS", "WARN", "FLAG", "FAIL")}
+    counts = {s: 0 for s in ("PASS", "WARN", "FLAG", "FAIL", "SKIP")}
     for v in verdicts:
         counts[v["status"]] = counts.get(v["status"], 0) + 1
     return {
@@ -103,7 +103,7 @@ def aggregate(
         else 0.0
     )
 
-    counts = {s: 0 for s in ("PASS", "WARN", "FLAG", "FAIL")}
+    counts = {s: 0 for s in ("PASS", "WARN", "FLAG", "FAIL", "SKIP")}
     for v in verdicts:
         counts[v["status"]] = counts.get(v["status"], 0) + 1
 

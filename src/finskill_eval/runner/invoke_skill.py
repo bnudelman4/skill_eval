@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
@@ -125,10 +126,20 @@ def parse_activation(log: str, intended_skill: str) -> tuple[bool, Optional[str]
     return (selected == intended_skill, selected)
 
 
+TIMEOUT_RETURNCODE = 124  # conventional timeout exit code
+
+
 def _default_runner(cmd: list[str], cwd: str, timeout: Optional[int]) -> ProcResult:
-    proc = subprocess.run(
-        cmd, cwd=cwd, timeout=timeout, capture_output=True, text=True
-    )
+    try:
+        proc = subprocess.run(
+            cmd, cwd=cwd, timeout=timeout, capture_output=True, text=True
+        )
+    except subprocess.TimeoutExpired as exc:
+        # A slow run must not crash the batch: surface partial output + a marker
+        # so run_skill records a failed SkillRun and the grid continues.
+        out = exc.stdout.decode() if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+        err = exc.stderr.decode() if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+        return ProcResult(out, f"{err}\nTIMEOUT after {timeout}s", TIMEOUT_RETURNCODE)
     return ProcResult(proc.stdout, proc.stderr, proc.returncode)
 
 
@@ -154,11 +165,21 @@ def run_skill(
     bare: bool = True,
     output_format: str = "json",
     runner: Optional[Runner] = None,
+    skill_src_dir: Optional[Path] = None,
 ) -> SkillRun:
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     runner = runner or _default_runner
     tools = allowed_tools or ["Read", "Bash", "Write"]
+
+    # Stage the skill into the isolated workdir so --bare (which skips ~/.claude
+    # auto-discovery) can still load it. The skill dir name becomes its trigger.
+    if skill_src_dir is not None:
+        src = Path(skill_src_dir)
+        dest = workdir / ".claude" / "skills" / src.name
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(src, dest)
 
     artifact = workdir / "output" / f"{skill_name}_{ticker}_{period}.xlsx"
     prompt = _build_prompt(skill_name, ticker, period, data_source, str(artifact))
