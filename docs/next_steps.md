@@ -27,7 +27,7 @@ and the artifact it would produce.
 - **Cost:** one live inspection of `--output-format stream-json` to identify
   the authoritative skill-load event type, then a 20-line parser update.
   **Sub-$1 metered.**
-- **Output:** activation rate near ground truth; M7's reward signal becomes
+- **Output:** activation rate near ground truth; reward signal becomes
   reliable.
 
 ### 3. Quarterly SEC 10-Q gold

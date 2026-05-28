@@ -115,7 +115,7 @@ The LLM:
 
 - Runs the analysis (Claude Code under test, the candidate skill).
 - Maps labels to canonical names (extractor - semantic, not arithmetic).
-- Proposes description edits in M7 (semantic, not arithmetic).
+- Proposes description edits (semantic, not arithmetic).
 
 Python:
 
@@ -124,7 +124,7 @@ Python:
 - Aggregates verdicts and renders scorecards (`metrics.py`, `report.py`).
 
 This is the "neuro-symbolic split" referenced throughout the spec. It is
-non-negotiable: a self-improving optimizer (M7) needs a reward signal it
+non-negotiable: a self-improving optimizer needs a reward signal it
 cannot game, and an LLM grader is gameable.
 
 ---

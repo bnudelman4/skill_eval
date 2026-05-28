@@ -3,8 +3,7 @@
 **An automated evaluation pipeline for Claude Code finance skills.** It runs a
 skill headlessly, grades every number it produced against an independent
 financial data source, and reports activation, accuracy, latency, and cost on a
-research-grounded scorecard — turning "is this skill ready to ship?" into a
-question a CI job can answer.
+research-grounded scorecard.
 
 The headline experiment ("M6 A/B") converts each Daloopa-authored skill to use
 the [Financial Modeling Prep (FMP)](https://site.financialmodelingprep.com/) API
@@ -26,22 +25,23 @@ Why: the research is unambiguous that LLMs hallucinate financial numerics. An
 LLM grading an LLM inherits the same failure mode. See
 [FAITH (arXiv 2508.05201)](https://arxiv.org/abs/2508.05201) and
 [Finance Agent Benchmark (arXiv 2508.00828)](https://arxiv.org/abs/2508.00828)
-— best-model accuracy on real finance research tasks <50%.
+
+- best-model accuracy on real finance research tasks <50%.
 
 ---
 
 ## Headline result (live, 9-sample pilot on the converted FMP skills)
 
-| Metric | Value | Notes |
-|---|---|---|
-| **Accuracy pass-rate @ 1%** | **87.2%** | `tearsheet`, `comps`, `capital-allocation` × AAPL, JPM, NKE (clean + bank + off-calendar FYE) |
-| Direct fundamentals pass-rate | **100%** | Every gold-covered direct lookup matched to the dollar |
-| Real catches | 2 | JPM `shares_outstanding` summed across 4 quarters (~4× wrong); a SEC client period-selection bug it surfaced in our own code |
-| Reliability | 9/9 artifacts | After robust-discovery + retries |
-| Activation detection | 22% | Partial — stream-json signal fires only when the agent explicitly Reads the staged SKILL.md |
-| Cost / run | ~$0.60 mean | Notional under Max; metered ≈ $0.30–1.50 depending on skill |
+| Metric                        | Value         | Notes                                                                                                                        |
+| ----------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Accuracy pass-rate @ 1%**   | **87.2%**     | `tearsheet`, `comps`, `capital-allocation` × AAPL, JPM, NKE (clean + bank + off-calendar FYE)                                |
+| Direct fundamentals pass-rate | **100%**      | Every gold-covered direct lookup matched to the dollar                                                                       |
+| Real catches                  | 2             | JPM `shares_outstanding` summed across 4 quarters (~4× wrong); a SEC client period-selection bug it surfaced in our own code |
+| Reliability                   | 9/9 artifacts | After robust-discovery + retries                                                                                             |
+| Activation detection          | 22%           | Partial — stream-json signal fires only when the agent explicitly Reads the staged SKILL.md                                  |
+| Cost / run                    | ~$0.60 mean   | Notional under Max; metered ≈ $0.30–1.50 depending on skill                                                                  |
 
-The dominant remaining FLAGs are exactly the *informative* cross-vendor
+The dominant remaining FLAGs are exactly the _informative_ cross-vendor
 disagreements the design predicts: bank revenue definition (gross vs net) and
 multiples requiring market data SEC doesn't carry.
 
@@ -52,7 +52,7 @@ multiples requiring market data SEC doesn't carry.
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env   # fill in FMP_API_KEY, ANTHROPIC_API_KEY, (later) DALOOPA_MCP_URL/token
+# fill in FMP_API_KEY, ANTHROPIC_API_KEY, DALOOPA_MCP_URL/token
 
 python -m finskill_eval.config                          # validate config
 pytest                                                  # 185+ tests, all offline (network mocked)
@@ -75,13 +75,13 @@ GridSample(skill × ticker × period × data_source)
   ├─► robust artifact discovery            # newest .xlsx anywhere under workdir
   │
   ├─► extract/llm_extract.py (Option C)    # cheap LLM reads the produced xlsx,
-  │     returns {metric, period, value, unit} JSON — generalizes to any layout
+  │     returns {metric, period, value, unit} JSON - generalizes to any layout
   │
   ├─► build_ledger()                       # canonicalize labels, periods, units;
   │     wire derived cells to their input cells via METRIC_DEFS
   │
   ├─► recompute.py                         # pure Python re-derives every margin
-  │     / ratio / growth from the ledger's own inputs (lenient — unregistered
+  │     / ratio / growth from the ledger's own inputs (lenient, unregistered
   │     derived metrics skip, never crash)
   │
   ├─► verify.py                            # for each cell: lookup gold (SEC /
@@ -102,17 +102,17 @@ GridSample(skill × ticker × period × data_source)
 
 Banded comparison, not pass/fail. Relative error `|pred − truth| / |truth|`:
 
-| Band | Threshold | Status | Source |
-|---|---|---|---|
-| `exact` | == | PASS | tickers, dates, CIK |
-| `tight` | ≤0.1% | PASS | same-vendor sanity |
-| `xvendor_standard` | ≤0.5% | PASS | std vs std |
-| `xvendor_liberal` | ≤1.0% | PASS | as-reported vs lightly standardized |
-| `materiality` | ≤5.0% | **WARN** | [SEC SAB 99](https://www.sec.gov/interps/account/sab99.htm) |
-| `disagreement` | >5.0% | **FLAG** | likely restatement / definition mismatch — manual review |
+| Band               | Threshold | Status   | Source                                                      |
+| ------------------ | --------- | -------- | ----------------------------------------------------------- |
+| `exact`            | ==        | PASS     | tickers, dates, CIK                                         |
+| `tight`            | ≤0.1%     | PASS     | same-vendor sanity                                          |
+| `xvendor_standard` | ≤0.5%     | PASS     | std vs std                                                  |
+| `xvendor_liberal`  | ≤1.0%     | PASS     | as-reported vs lightly standardized                         |
+| `materiality`      | ≤5.0%     | **WARN** | [SEC SAB 99](https://www.sec.gov/interps/account/sab99.htm) |
+| `disagreement`     | >5.0%     | **FLAG** | likely restatement / definition mismatch — manual review    |
 
 Primary accuracy target: **pass-rate at `xvendor_liberal` (≤1%)**. The premise:
-cross-vendor disagreements are *expected and informative*, not automatically
+cross-vendor disagreements are _expected and informative_, not automatically
 bugs. The pipeline reports where on this spectrum each cell lands instead of a
 misleading binary.
 
@@ -120,14 +120,14 @@ misleading binary.
 
 ## Triangulation — three data sources, three roles
 
-| Source | Role | Why |
-|---|---|---|
-| **FMP** | Candidate | The data the skill under test uses. Never grades itself. |
-| **Daloopa** | Gold | The reference the skills were authored against. Standardized + human-verified. |
-| **SEC EDGAR** | Anchor | Independent as-reported; free; breaks ties when FMP and Daloopa disagree. |
+| Source        | Role      | Why                                                                            |
+| ------------- | --------- | ------------------------------------------------------------------------------ |
+| **FMP**       | Candidate | The data the skill under test uses. Never grades itself.                       |
+| **Daloopa**   | Gold      | The reference the skills were authored against. Standardized + human-verified. |
+| **SEC EDGAR** | Anchor    | Independent as-reported; free; breaks ties when FMP and Daloopa disagree.      |
 
 Two sources can't tell skill error from vendor quirk; triangulation localizes
-which layer broke. *Status:* Daloopa key delayed → bootstrap gold = SEC; the
+which layer broke. _Status:_ Daloopa key delayed → bootstrap gold = SEC; the
 full A/B awaits credentials. The `conversion/compare.py` driver is ready.
 
 ---
@@ -138,12 +138,12 @@ full A/B awaits credentials. The `conversion/compare.py` driver is ready.
 finskill-eval/
   config/
     settings.yaml            # tolerance bands, targets, pinned model + skill SHA
-    universe.yaml            # tickers × periods (locked in Part A)
+    universe.yaml            # tickers × periods
   src/finskill_eval/
     config.py                # pydantic-validated; fails loud on placeholders
     ledger.py / normalize.py # typed cell container; label/number/period normalization
     parse_xlsx.py            # deterministic fallback parser (multi-sheet + matrix)
-    extract/llm_extract.py   # Option C: layout-agnostic LLM ingestion
+    extract/llm_extract.py   # layout-agnostic LLM ingestion
     recompute.py             # pure-Python derived-metric formulas + registry
     tolerance.py             # banded comparator (no I/O)
     verify.py                # parse → recompute → compare → CellVerdict
@@ -151,12 +151,12 @@ finskill-eval/
                              # Daloopa MCP (gold, deferred), cache (frozen snapshots)
     runner/                  # invoke_skill, grid, parallel (resumable), run_baseline
     metrics.py / report.py   # aggregation + scorecard rendering
-    conversion/              # M6: Daloopa → FMP skill token swap + fmp_data_access.md
-    optimize/                # M7: SkillDoc (protected body), candidate generator,
+    conversion/              # Daloopa → FMP skill token swap + fmp_data_access.md
+    optimize/                # SkillDoc (protected body), candidate generator,
                              # validation gate, loop, feedback
   skills/
     daloopa/   pinned upstream, read-only
-    fmp/       converted variants (output of M6)
+    fmp/       converted variants
   fixtures/                  # known-answer xlsx + expected_ledgers.json
   tests/                     # 185+ tests, all green; network always mocked
   results/                   # scorecards + per-sample JSON (gitignored)
@@ -188,7 +188,7 @@ finskill-eval/
 
 ---
 
-## Honest open items
+## Honest Results
 
 - **Activation detection partial (22%).** Stream-json fires when the agent
   Reads the staged SKILL.md; Claude Code can auto-inject a skill without a Read
@@ -199,8 +199,7 @@ finskill-eval/
 - **Sample size 9.** Pilot scale. The architecture supports the full 192-cell
   grid (8 tickers × 4 periods × 3 skills × 2 sources) once Daloopa lands.
 
-A thorough write-up — iterations, the parser→Option C pivot, live-run findings,
-and the friend's feedback handled — is in
+A thorough write-up is in
 [`docs/in_depth_report.md`](docs/in_depth_report.md). Design-decisions mapping
 in [`docs/design_decisions.md`](docs/design_decisions.md). What I'd build next
 in [`docs/next_steps.md`](docs/next_steps.md).
