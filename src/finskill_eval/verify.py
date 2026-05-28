@@ -96,7 +96,10 @@ def verify(
     ground_truth: GroundTruthSource,
     *,
     bands: Optional[Bands] = None,
-    arithmetic_band: str = "tight",
+    # stated-vs-recompute consistency tolerance. Inputs are displayed rounded
+    # (to $millions), so a recomputed ratio differs from the skill's stated value
+    # by sub-1% rounding; only a >1% gap signals a real arithmetic error.
+    arithmetic_band: str = "xvendor_liberal",
 ) -> VerifyReport:
     b = bands or Bands.default()
     order = _band_order(b)
