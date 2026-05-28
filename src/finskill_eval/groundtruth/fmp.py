@@ -20,57 +20,168 @@ from finskill_eval.groundtruth.base import Value
 logger = logging.getLogger(__name__)
 
 # canonical label -> (endpoint, field).
+# Comprehensive coverage of the FMP `stable/` API. Built by probing the live
+# endpoints (income-statement, balance-sheet-statement, cash-flow-statement,
+# key-metrics, ratios, financial-growth, enterprise-values, profile, quote)
+# and mapping every analyst-facing metric to a canonical label.
+#
 # Extending this is bounded (financial metric universe is closed) and one-line
 # per addition; this is NOT the open-ended parser problem.
 LABEL_MAP: dict[str, tuple[str, str]] = {
-    # income-statement
+    # ── income statement (direct) ────────────────────────────────────────
     "revenue": ("income-statement", "revenue"),
-    "net_income": ("income-statement", "netIncome"),
-    "gross_profit": ("income-statement", "grossProfit"),
-    "operating_income": ("income-statement", "operatingIncome"),
-    "ebitda": ("income-statement", "ebitda"),
-    "shares_outstanding": ("income-statement", "weightedAverageShsOutDil"),
-    "diluted_eps": ("income-statement", "epsdiluted"),
-    "basic_eps": ("income-statement", "eps"),
     "cost_of_revenue": ("income-statement", "costOfRevenue"),
+    "gross_profit": ("income-statement", "grossProfit"),
+    "operating_expenses": ("income-statement", "operatingExpenses"),
+    "operating_income": ("income-statement", "operatingIncome"),
+    "ebit": ("income-statement", "ebit"),
+    "ebitda": ("income-statement", "ebitda"),
+    "net_income": ("income-statement", "netIncome"),
+    "income_before_tax": ("income-statement", "incomeBeforeTax"),
+    "income_tax_expense": ("income-statement", "incomeTaxExpense"),
+    "interest_expense": ("income-statement", "interestExpense"),
+    "interest_income": ("income-statement", "interestIncome"),
+    "depreciation_and_amortization": ("income-statement", "depreciationAndAmortization"),
     "rd_expense": ("income-statement", "researchAndDevelopmentExpenses"),
     "sga_expense": ("income-statement", "sellingGeneralAndAdministrativeExpenses"),
-    "interest_expense": ("income-statement", "interestExpense"),
-    "depreciation_and_amortization": ("income-statement", "depreciationAndAmortization"),
-    # balance-sheet
-    "cash_and_equivalents": ("balance-sheet-statement", "cashAndCashEquivalents"),
-    "short_term_investments": ("balance-sheet-statement", "shortTermInvestments"),
+    "ga_expense": ("income-statement", "generalAndAdministrativeExpenses"),
+    "selling_expense": ("income-statement", "sellingAndMarketingExpenses"),
+    "eps": ("income-statement", "eps"),
+    "diluted_eps": ("income-statement", "epsDiluted"),
+    "basic_eps": ("income-statement", "eps"),
+    "shares_outstanding": ("income-statement", "weightedAverageShsOutDil"),
+    "weighted_shares_basic": ("income-statement", "weightedAverageShsOut"),
+    "weighted_shares_diluted": ("income-statement", "weightedAverageShsOutDil"),
+
+    # ── balance sheet (direct) ───────────────────────────────────────────
+    "total_assets": ("balance-sheet-statement", "totalAssets"),
+    "total_current_assets": ("balance-sheet-statement", "totalCurrentAssets"),
+    "total_non_current_assets": ("balance-sheet-statement", "totalNonCurrentAssets"),
+    "total_liabilities": ("balance-sheet-statement", "totalLiabilities"),
+    "total_current_liabilities": ("balance-sheet-statement", "totalCurrentLiabilities"),
+    "total_non_current_liabilities": ("balance-sheet-statement", "totalNonCurrentLiabilities"),
+    "total_equity": ("balance-sheet-statement", "totalStockholdersEquity"),
     "total_debt": ("balance-sheet-statement", "totalDebt"),
     "long_term_debt": ("balance-sheet-statement", "longTermDebt"),
     "short_term_debt": ("balance-sheet-statement", "shortTermDebt"),
-    "total_equity": ("balance-sheet-statement", "totalStockholdersEquity"),
-    "total_assets": ("balance-sheet-statement", "totalAssets"),
-    # cash-flow
+    "net_debt": ("balance-sheet-statement", "netDebt"),
+    "cash_and_equivalents": ("balance-sheet-statement", "cashAndCashEquivalents"),
+    "short_term_investments": ("balance-sheet-statement", "shortTermInvestments"),
+    "long_term_investments": ("balance-sheet-statement", "longTermInvestments"),
+    "cash_and_short_term_investments": ("balance-sheet-statement", "cashAndShortTermInvestments"),
+    "accounts_receivable": ("balance-sheet-statement", "accountsReceivables"),
+    "accounts_payable": ("balance-sheet-statement", "accountPayables"),
+    "inventory": ("balance-sheet-statement", "inventory"),
+    "goodwill": ("balance-sheet-statement", "goodwill"),
+    "intangible_assets": ("balance-sheet-statement", "intangibleAssets"),
+    "goodwill_and_intangibles": ("balance-sheet-statement", "goodwillAndIntangibleAssets"),
+    "property_plant_equipment": ("balance-sheet-statement", "propertyPlantEquipmentNet"),
+    "common_stock": ("balance-sheet-statement", "commonStock"),
+    "retained_earnings": ("balance-sheet-statement", "retainedEarnings"),
+    "capital_lease_obligations": ("balance-sheet-statement", "capitalLeaseObligations"),
+    "deferred_revenue": ("balance-sheet-statement", "deferredRevenue"),
+    "accrued_expenses": ("balance-sheet-statement", "accruedExpenses"),
+
+    # ── cash flow statement (direct) ─────────────────────────────────────
     "operating_cash_flow": ("cash-flow-statement", "operatingCashFlow"),
+    "investing_cash_flow": ("cash-flow-statement", "netCashProvidedByInvestingActivities"),
+    "financing_cash_flow": ("cash-flow-statement", "netCashProvidedByFinancingActivities"),
     "capital_expenditures": ("cash-flow-statement", "capitalExpenditure"),
     "free_cash_flow": ("cash-flow-statement", "freeCashFlow"),
     "dividends_paid": ("cash-flow-statement", "netDividendsPaid"),
+    "common_dividends_paid": ("cash-flow-statement", "commonDividendsPaid"),
     "share_repurchases": ("cash-flow-statement", "commonStockRepurchased"),
+    "stock_issuance": ("cash-flow-statement", "commonStockIssuance"),
     "acquisitions": ("cash-flow-statement", "acquisitionsNet"),
-    # market / valuation
+    "change_in_working_capital": ("cash-flow-statement", "changeInWorkingCapital"),
+    "income_taxes_paid": ("cash-flow-statement", "incomeTaxesPaid"),
+    "interest_paid": ("cash-flow-statement", "interestPaid"),
+    "deferred_income_tax": ("cash-flow-statement", "deferredIncomeTax"),
+
+    # ── market / valuation ───────────────────────────────────────────────
     "market_capitalization": ("key-metrics", "marketCap"),
     "enterprise_value": ("key-metrics", "enterpriseValue"),
     "price": ("quote", "price"),
-    # FMP-published derived metrics (skip our recompute, use FMP's number)
-    # Margins are stored as fractions in FMP's `ratios` endpoint; the verifier
-    # already handles scale-normalization so 0.4621 vs 46.21 will land in band.
+    "beta": ("profile", "beta"),
+    "day_high": ("quote", "dayHigh"),
+    "day_low": ("quote", "dayLow"),
+    "average_volume": ("quote", "averageVolume"),
+
+    # ── FMP-published derived metrics (use FMP's number rather than recompute) ──
+    # Margins (note: FMP stores as fractions, e.g. 0.4621; verifier handles
+    # scale-normalization so it lands against stated 46.21).
     "gross_margin": ("ratios", "grossProfitMargin"),
     "operating_margin": ("ratios", "operatingProfitMargin"),
     "net_margin": ("ratios", "netProfitMargin"),
-    "ebitda_margin": ("ratios", "ebitdaratio"),
+    "ebit_margin": ("ratios", "ebitMargin"),
+    "ebitda_margin": ("ratios", "ebitdaMargin"),
+    "bottom_line_margin": ("ratios", "bottomLineProfitMargin"),
+    # Valuation multiples
     "pe_ratio": ("ratios", "priceEarningsRatio"),
-    "ev_ebitda": ("key-metrics", "enterpriseValueOverEBITDA"),
     "ps_ratio": ("ratios", "priceToSalesRatio"),
     "pb_ratio": ("ratios", "priceToBookRatio"),
+    "ev_ebitda": ("key-metrics", "enterpriseValueOverEBITDA"),
+    "ev_sales": ("ratios", "evToSales"),
+    "ev_fcf": ("ratios", "evToFreeCashFlow"),
+    "ev_operating_cash_flow": ("ratios", "evToOperatingCashFlow"),
+    "forward_peg": ("ratios", "forwardPriceToEarningsGrowthRatio"),
+    # Yields
     "dividend_yield": ("ratios", "dividendYield"),
-    "interest_coverage": ("ratios", "interestCoverage"),
-    "debt_to_equity": ("ratios", "debtEquityRatio"),
     "fcf_yield": ("ratios", "freeCashFlowYield"),
+    "earnings_yield": ("ratios", "earningsYield"),
+    # Liquidity
+    "current_ratio": ("ratios", "currentRatio"),
+    "cash_ratio": ("ratios", "cashRatio"),
+    # Leverage / coverage
+    "debt_to_equity": ("ratios", "debtToEquityRatio"),
+    "debt_to_assets": ("ratios", "debtToAssetsRatio"),
+    "debt_to_capital": ("ratios", "debtToCapitalRatio"),
+    "debt_to_market_cap": ("ratios", "debtToMarketCap"),
+    "interest_coverage": ("ratios", "interestCoverageRatio"),
+    "financial_leverage": ("ratios", "financialLeverageRatio"),
+    "debt_service_coverage": ("ratios", "debtServiceCoverageRatio"),
+    "capex_coverage": ("ratios", "capitalExpenditureCoverageRatio"),
+    # Efficiency / turnover
+    "asset_turnover": ("ratios", "assetTurnover"),
+    "fixed_asset_turnover": ("ratios", "fixedAssetTurnover"),
+    "days_sales_outstanding": ("ratios", "daysOfSalesOutstanding"),
+    "days_inventory_outstanding": ("ratios", "daysOfInventoryOutstanding"),
+    "days_payables_outstanding": ("ratios", "daysOfPayablesOutstanding"),
+    "cash_conversion_cycle": ("ratios", "cashConversionCycle"),
+    # Tax / payouts
+    "effective_tax_rate": ("ratios", "effectiveTaxRate"),
+    "dividend_payout_ratio": ("ratios", "dividendPayoutRatio"),
+    "capex_to_revenue": ("ratios", "capexToRevenue"),
+    "capex_to_depreciation": ("ratios", "capexToDepreciation"),
+    "capex_to_ocf": ("ratios", "capexToOperatingCashFlow"),
+    # Per-share metrics
+    "book_value_per_share": ("ratios", "bookValuePerShare"),
+    "cash_per_share": ("ratios", "cashPerShare"),
+    "fcf_per_share": ("ratios", "freeCashFlowPerShare"),
+    "capex_per_share": ("ratios", "capexPerShare"),
+    "interest_debt_per_share": ("ratios", "interestDebtPerShare"),
+    "dividend_per_share": ("ratios", "dividendPerShare"),
+    # Quality / income decomposition
+    "income_quality": ("ratios", "incomeQuality"),
+    "interest_burden": ("ratios", "interestBurden"),
+    "ebt_per_ebit": ("ratios", "ebtPerEbit"),
+    # Graham screens
+    "graham_number": ("ratios", "grahamNumber"),
+    "graham_net_net": ("ratios", "grahamNetNet"),
+
+    # ── growth metrics (financial-growth endpoint) ───────────────────────
+    "revenue_growth": ("financial-growth", "revenueGrowth"),
+    "gross_profit_growth": ("financial-growth", "grossProfitGrowth"),
+    "ebit_growth": ("financial-growth", "ebitgrowth"),
+    "ebitda_growth": ("financial-growth", "ebitdaGrowth"),
+    "net_income_growth": ("financial-growth", "bottomLineNetIncomeGrowth"),
+    "eps_growth": ("financial-growth", "epsgrowth"),
+    "diluted_eps_growth": ("financial-growth", "epsdilutedGrowth"),
+    "fcf_growth": ("financial-growth", "freeCashFlowGrowth"),
+    "asset_growth": ("financial-growth", "assetGrowth"),
+    "debt_growth": ("financial-growth", "debtGrowth"),
+    "dividends_per_share_growth": ("financial-growth", "dividendsPerShareGrowth"),
+    "book_value_per_share_growth": ("financial-growth", "bookValueperShareGrowth"),
 }
 
 Fetch = Callable[[str, dict], object]
@@ -103,17 +214,22 @@ class FMPClient:
         fetch: Optional[Fetch] = None,
         rate_limit_rps: float = 1.5,
         max_retries: int = 4,
+        resolver: object = None,   # optional LLMLabelResolver (duck-typed: has .resolve())
     ):
         self._api_key = api_key
         self._base_url = base_url
         self._rate_limit_rps = rate_limit_rps
         self._max_retries = max_retries
         self._fetch = fetch or self._default_fetch
+        self._resolver = resolver
 
     def get(
         self, ticker: str, period: Optional[str], canonical_label: str
     ) -> Optional[Value]:
         spec = LABEL_MAP.get(canonical_label)
+        if spec is None and self._resolver is not None:
+            # LLM fallback: ask the resolver for an (endpoint, field) mapping
+            spec = self._resolver.resolve(canonical_label)
         if spec is None:
             return None
         endpoint, field = spec
