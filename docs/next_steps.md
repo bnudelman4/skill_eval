@@ -3,6 +3,67 @@
 Ordered by leverage. Each item names the rough cost (live $ vs. offline only)
 and the artifact it would produce.
 
+A second worker at the company reframed the eval question after the first
+draft. Their take is that process drift, when the agent goes off the path
+the skill specified, is a more interesting failure mode than arithmetic
+drift. The first new item below is built around that framing. The rest are
+the original Tier 1 through Tier 3 priorities.
+
+Recently completed work that is no longer in the next-steps queue:
+
+- FMP-self-check layer with the LLM extractor seeing SKILL.md and the
+  full FMP field catalog inline. Live results 100% pass-rate on AAPL,
+  JPM, and NKE with zero skill arithmetic errors. Coverage went from
+  about 40% to over 90% on the cells the data source actually carries.
+- LABEL_MAP expanded from 11 entries to 132 by probing FMP's stable API
+  endpoints (about 466 fields). Used as the fallback when the extractor
+  has not been asked for inline mappings.
+- LLM-backed label resolver with disk-cached responses. Used as a
+  secondary fallback when LABEL_MAP misses.
+- Quarterly period support on FMPClient with the right limit parameter
+  so historical FY2024 quarters do not get dropped by FMP's default
+  five-row cap.
+- Scale and sign aware compare on the FMP-self-check leg, which clears
+  the cosmetic display-convention failures (margins as fractions vs
+  percents, cash items as outflow-negative vs absolute-positive).
+- NKE matrix-layout parser bug fix (the "FY5720" garbage period keys),
+  which unblocked NKE's segment artifact.
+
+---
+
+## Tier 0 — the second worker's framing: behavioral conformance
+
+### 0. Process-drift evaluation layer
+
+- **Why:** the numerical layer this project ships is necessary but not
+  sufficient. An arithmetically correct deliverable can still be
+  analytically wrong if the agent made bad procedural choices. Examples:
+  picks 30 peers when the skill says 5 to 10; spends turns on D&A after
+  the skill flagged it as not relevant; searches obscure news in the
+  middle of a JPM run; ships a partial deliverable; hallucinates a
+  metric definition the skill never mentioned. None of those are caught
+  by FMP-self-check or by the SEC anchor.
+- **What it looks like in practice:** four LLM-as-judge layers with
+  SKILL.md as the source of truth.
+  1. Tool-call trace conformance. Parse the stream-json events into a
+     tool sequence and compare against the SKILL.md's prescribed flow.
+     Report percent of expected steps done and percent of unexpected
+     steps.
+  2. Decision-quality scoring. For analytical choices like peer set,
+     KPI selection, or segment emphasis, an analyst-LLM scores them 0
+     to 5 with rationale.
+  3. Off-path detection. A judge LLM reads the run log and flags
+     deviations from SKILL.md ("at turn 12 the agent began researching
+     crypto news despite no instruction to do so").
+  4. Workflow-completion check. Parse the deliverable structure and
+     confirm every section the skill prescribed is present.
+- **Cost:** offline authoring for the judge prompts, plus one live
+  judge LLM call per sample at the end of each run. Cheap under
+  Max-sub auth.
+- **Output:** a `results/_behavioral/scorecard.md` with the four
+  layers' verdicts per sample, plus an aggregate. Sits on top of the
+  existing numerical scorecard rather than replacing it.
+
 ---
 
 ## Tier 1 — closes the headline experiment

@@ -351,6 +351,64 @@ Both behaviors are regression-tested.
 
 ---
 
+### 6.8 The FMP-self-check layer and extraction-time mapping
+
+A later round of work added a second deterministic layer that asks a
+different question from the SEC anchor. The cross-vendor SEC check asks
+"do two independent sources agree on this number." The FMP-self-check asks
+"did the skill correctly transcribe and compute from the data source it
+was actually given." For each direct cell it looks up the canonical FMP
+field and compares. For each derived cell it queries FMP for the inputs
+of the formula, recomputes in Python, and compares to the skill's stated
+value.
+
+The first version mapped canonical labels to FMP fields through a
+hand-written lookup table. After running it on JPM and NKE most of the
+cells skipped, because the skills emitted analyst-grade names like "NII
+as % of Revenue" or "Diluted Shares (M)" or "D&A" that did not match the
+table. Adding an LLM-backed fallback resolver helped, but the resolver
+only saw the canonical label without the skill's intent, so it returned
+"no good match" for things that were obviously mappable.
+
+The cleaner fix was to push label-to-FMP mapping upstream into the
+extraction pass. The LLM extractor was already reading the spreadsheet
+and assigning canonical names. With the skill's instruction body and
+FMP's full field catalog added to its context, it can also propose the
+FMP (endpoint, field) pair per cell inline. The verifier then uses those
+mappings directly, with no LABEL_MAP lookup needed. The neuro-symbolic
+split still holds, because the LLM is doing semantic work (mapping a
+label to a field name) while Python continues to do every arithmetic
+operation and every comparison.
+
+This is consistent with the literature that motivated the original
+parser-to-extractor pivot. Constrained structured output is more
+reliable than post-hoc parsing (LLMStructBench arXiv 2602.14743,
+StructEval arXiv 2505.20139). For financial documents specifically the
+recommended pattern is to decompose extraction into specialized subtasks
+with verification loops (arXiv 2603.22651). Label-to-FMP mapping is now
+one of those subtasks, done in the same pass as cell extraction.
+
+After this change the live results were:
+
+- AAPL tearsheet: 17 PASS, 0 FAIL, 0 SKIP, 100% pass-rate
+- JPM tearsheet: 86 PASS, 0 FAIL, 28 SKIP, 100% pass-rate, up from 44 graded
+- NKE tearsheet: 84 PASS, 0 FAIL, 100 SKIP, 100% pass-rate, up from 0 graded
+
+Zero skill arithmetic errors on the FMP-self-check leg across all three
+tickers. The remaining SKIPs are real FMP coverage gaps. NKE's product
+and region segments (Apparel, Footwear, APLA, EMEA) are not in FMP's
+standard fundamentals endpoints. JPM has a handful of bank composites
+that the standard endpoints do not carry either. These are data limits,
+not pipeline limits, and a richer source like Daloopa or direct 10-K
+segment parsing would close them.
+
+The two layers now produce a cleaner failure attribution per cell. When
+the FMP-self-check passes and the SEC anchor passes the cell is solid.
+When the FMP-self-check passes and the SEC anchor flags, the gap is a
+vendor disagreement or a definitional drift rather than a skill error.
+When the FMP-self-check fails the LLM mishandled FMP, and Python
+isolated which step.
+
 ## 7. The Daloopa→FMP conversion (M6)
 
 This is the headline experiment the project was named for. The conversion
@@ -393,6 +451,7 @@ credentials to execute variant A).
 | Stress test (NKE, JPM)            | NKE clean off-cal; JPM caught a real skill error      | shares_outstanding summed across quarters   |
 | Big test (9 samples) — round 1    | 36% pass-rate, half no-artifact                       | Drove reliability + arith_tol fixes         |
 | Big test (9 samples) — round 2    | **87.2%**, 9/9 artifacts, 100% on direct fundamentals | Production-shape result on real data        |
+| FMP-self-check (AAPL, JPM, NKE)   | 100% pass-rate all three, zero skill arithmetic errors | LLM extractor with SKILL.md + FMP catalog in context |
 
 A reviewer can scan the `git log` and see each fix go in with a regression
 test and a commit message that names the live finding it came from.
@@ -418,6 +477,64 @@ other stuff." That critique was triaged honestly:
   independently and comparing.
 
 ---
+
+## 9.5 A second round of feedback: process drift vs arithmetic drift
+
+A second worker at the company reframed the eval question entirely. Their
+take was that the most interesting failure mode in a finance agent is
+not "did the math come out wrong" but "did the agent go off the path the
+skill specified." Examples of off-path behavior they gestured at:
+
+- Picks 30 peers when the skill says 5 to 10
+- Spends turns on D&A after the skill flagged it as not relevant
+- Searches obscure news in the middle of a JPM run
+- Stops halfway and ships a partial deliverable
+- Hallucinates a metric definition the skill never mentioned
+- Writes bull and bear takes an analyst would side-eye
+
+The honest read is that both layers matter and they cover different
+risks. Numerical correctness is necessary because an analyst will not
+ship a deliverable with the wrong net income, and a deterministic Python
+check catches those errors every time, for free, in CI. But numerical
+correctness is not sufficient on its own, because an arithmetically
+correct deliverable can still be analytically wrong if the agent made bad
+procedural choices. The numerical layer is a ship-blocker. The
+behavioral layer is a quality bar.
+
+What this pipeline already covers from the second worker's framing:
+
+- Activation and selection, partially. Did the right skill trigger.
+- Cost and latency. Drift often shows up as excessive turns or token use.
+- The FAITH cell-type breakdown. Multivariate failure patterns can signal
+  reasoning gaps, not just data gaps.
+- The M7 protected analytical body. The skill's prose is off-limits to
+  the optimizer, so any drift can be attributed to the agent rather than
+  to a silently-edited skill.
+
+What is missing from the pipeline for the second worker's framing:
+
+- Tool-call trace conformance against the SKILL.md's prescribed flow
+- Decision-quality scoring through LLM-as-judge on choices like peer set
+  or KPI selection
+- Off-path detection where a judge LLM reviews the run log and flags
+  moments the agent deviated
+- A workflow-completion check on whether the deliverable includes every
+  section the skill prescribed
+- A qualitative content review on the narrative paragraphs
+
+All four are LLM-as-judge tasks with SKILL.md as the source of truth.
+The current architecture already supports adding them. Stream-json
+captures every tool call, M7's machinery already runs LLM-as-judge
+mechanics for description optimization, and SKILL.md is already pinned
+as a protected ground truth. The next milestone is to wire these as
+additional verdict layers on top of the existing numerical scorecard.
+
+The net read on the second worker's framing is that they are pointing at
+the next floor up. The work in this project is the floor below it, and
+it is a necessary one. A behavioral check that approved an
+analytically-correct deliverable with wrong numbers would still be a
+fireable mistake. With both layers in place, the eval gets much closer
+to "would an analyst ship this without changes."
 
 ## 10. The codebase, in functional terms
 
@@ -541,14 +658,17 @@ ones); per-skill effect-size CIs.
 
 ## 13. Closing
 
-The pipeline catches real errors on real data (the JPM share-count bug;
+The pipeline catches real errors on real data (the JPM share-count bug,
 the SEC period-selection bug in our own code) and reports the _informative_
 cross-vendor disagreements the research predicts (JPM bank revenue, NKE
-off-calendar fiscal). Headline accuracy at 87.2% on a 9-sample live pilot,
-100% on direct gold-covered fundamentals. The remaining open items are
-named, with the reasons.
+off-calendar fiscal). Headline accuracy at 87.2% on the 9-sample big
+test against SEC, 100% on direct gold-covered fundamentals, and 100% on
+the FMP-self-check leg across AAPL, JPM, and NKE with zero skill
+arithmetic errors found.
 
 The premise was that an automated, research-grounded, neuro-symbolic
-evaluator could turn a question that today needs a human analyst's eye
-("are these numbers right?") into a CI-runnable scorecard with audit
-trails. The evidence on the table says it can.
+evaluator could turn a question that today needs a human analyst's eye,
+"are these numbers right," into a CI-runnable scorecard with audit
+trails. The evidence on the table says it can. The next floor up, "is
+this the analysis an analyst would have done," is a different and
+harder question, and the architecture is ready to host it.
