@@ -1,6 +1,6 @@
 # finskill-eval — In-Depth Report
 
-*Author: Benjamin Nudelman. Date: May 2026.*
+_Author: Benjamin Nudelman. Date: May 2026._
 
 This document is the long-form companion to the [README](../README.md). It
 covers, in order: the problem; the research foundation, with primary-source
@@ -13,23 +13,21 @@ was rejected; and the honest open items.
 
 ## 1. The problem
 
-Modern Claude Code "skills" let an LLM agent execute a domain workflow —
-sourcing data, computing metrics, building a deliverable — by reading a
+Modern Claude Code "skills" let an LLM agent execute a domain workflow -
+sourcing data, computing metrics, building a deliverable - by reading a
 markdown instruction file. For finance specifically, [Daloopa's
-`investing` skill suite](https://github.com/daloopa/investing) (pinned at SHA
-`17039332eb6f9323d8415156f7202feef538a3f2`) packages tearsheets, comparable
-companies analyses, capital-allocation deep-dives, etc., behind the Daloopa
+`investing` skill suite](https://github.com/daloopa/investing) packages tearsheets, comparable companies analyses, capital-allocation deep-dives, etc., behind the Daloopa
 MCP data layer.
 
 Two related questions need answering:
 
 1. **Per-skill correctness.** When a skill produces a spreadsheet of numbers,
-   how do you know they're right — without a human analyst checking every
+   how do you know they're right without a human analyst checking every
    cell?
 2. **The data-layer A/B.** If you swap Daloopa for a different backend
    (Financial Modeling Prep, FMP), does the deliverable stay correct?
 
-Both questions need an *evaluator* that an LLM can't game. That is what this
+Both questions need an _evaluator_ that an LLM can't game. That is what this
 project builds.
 
 ---
@@ -42,8 +40,8 @@ a major mid-project pivot. Each was re-verified before committing to it.
 ### 2.1 LLMs hallucinate finance numbers — they can't grade themselves
 
 - **FAITH** ([arXiv 2508.05201](https://arxiv.org/abs/2508.05201)) introduces
-  a four-type taxonomy of financial-table reasoning (*direct lookup*,
-  *comparative*, *bivariate*, *multivariate*) and measures intrinsic
+  a four-type taxonomy of financial-table reasoning (_direct lookup_,
+  _comparative_, _bivariate_, _multivariate_) and measures intrinsic
   hallucination on tables drawn from S&P 500 annual reports. The complexity
   gradient is exactly the gradient our pipeline measures: simple lookups land
   cleanly; multivariate cells are where failure clusters.
@@ -54,14 +52,14 @@ a major mid-project pivot. Each was re-verified before committing to it.
 
 The unambiguous conclusion: **LLM-grades-LLM is unreliable for financial
 numerics.** A verifier whose judgments cannot be trusted is worse than no
-verifier — it produces false confidence.
+verifier - it produces false confidence.
 
 ### 2.2 Tolerance bands: SEC SAB 99 materiality
 
 The 5% disagreement boundary is not a guess. **SEC Staff Accounting Bulletin
 No. 99** ([sec.gov/interps/account/sab99.htm](https://www.sec.gov/interps/account/sab99.htm))
 codifies 5% as the materiality rule-of-thumb in financial reporting.
-Disagreements above that line are *material* — meaning a human should look,
+Disagreements above that line are _material_ - meaning a human should look,
 not that the skill is automatically wrong. The pipeline encodes this as a
 distinct **FLAG** status, separate from FAIL.
 
@@ -70,14 +68,14 @@ distinct **FLAG** status, separate from FAIL.
 [Anthropic's Agent Skills docs](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
 make two design-relevant claims:
 
-- Each request loads **at most 8 skills**; the *description* field decides
+- Each request loads **at most 8 skills**; the _description_ field decides
   whether a skill triggers at all (activation), and which of several
   candidates the agent picks (selection).
 - The skill body's analytical prose is what shapes its output once invoked
   (accuracy).
 
 These three surfaces — activation, selection, accuracy — become three distinct
-metrics on the scorecard, each tied to a *different* fix path. The M7 optimizer
+metrics on the scorecard, each tied to a _different_ fix path. The M7 optimizer
 restricts itself to editing description + progressive-disclosure structure;
 the analytical body is protected.
 
@@ -90,7 +88,7 @@ Two literatures converged on a single recommendation:
   [StructEval (arXiv 2505.20139)](https://arxiv.org/html/2505.20139v1), and
   applied write-ups on constrained decoding all converge: a model emitting
   schema-valid JSON is dramatically more reliable than parsing freehand
-  output, with a caveat — forcing the schema *inline with reasoning* can
+  output, with a caveat - forcing the schema _inline with reasoning_ can
   degrade reasoning by 10–15%.
 - **Rule-based extractors are being supplanted by LLM extraction with
   hybrid verification** for financial documents.
@@ -103,7 +101,7 @@ This frames the central pipeline change documented in §6: the deterministic
 `parse_xlsx` was replaced as the default ingestion path by **Option C** — a
 cheap LLM extractor that emits JSON, parsed by `json.loads`, then checked by
 our rule-based verifier. Exactly the hybrid the research recommends, and it
-preserves the principle from §2.1 because the *grader* (verifier) is still
+preserves the principle from §2.1 because the _grader_ (verifier) is still
 pure Python.
 
 ---
@@ -114,11 +112,13 @@ pure Python.
 > every numerical comparison.**
 
 The LLM:
+
 - Runs the analysis (Claude Code under test, the candidate skill).
-- Maps labels to canonical names (extractor — semantic, not arithmetic).
+- Maps labels to canonical names (extractor - semantic, not arithmetic).
 - Proposes description edits in M7 (semantic, not arithmetic).
 
 Python:
+
 - Re-derives every derived metric (`recompute.py`).
 - Compares values against gold via banded tolerance (`tolerance.py`).
 - Aggregates verdicts and renders scorecards (`metrics.py`, `report.py`).
@@ -131,11 +131,11 @@ cannot game, and an LLM grader is gameable.
 
 ## 4. Three-source triangulation
 
-| Source | Role | Why |
-|---|---|---|
-| **FMP** | Candidate | The data the skill uses. Never the grader. |
-| **Daloopa** | Gold | Standardized, human-verified, what the skills were authored against. |
-| **SEC EDGAR** | Anchor | Independent as-reported; free; breaks ties. |
+| Source        | Role      | Why                                                                  |
+| ------------- | --------- | -------------------------------------------------------------------- |
+| **FMP**       | Candidate | The data the skill uses. Never the grader.                           |
+| **Daloopa**   | Gold      | Standardized, human-verified, what the skills were authored against. |
+| **SEC EDGAR** | Anchor    | Independent as-reported; free; breaks ties.                          |
 
 Two sources: a disagreement is ambiguous (skill error or vendor quirk?).
 Three sources: triangulation localizes the broken layer. This proved its
@@ -149,16 +149,16 @@ swaps via one config field). Full A/B awaits the key.
 
 ## 5. Build sequence — what each milestone delivered
 
-| Milestone | Delivered |
-|---|---|
-| **M0** | Scaffolding; pydantic config that fails loudly on placeholder pins (model snapshot, skill SHA) and on candidate==gold |
-| **M1** | Three hand-built known-answer fixtures with a deliberate-wrong cell and a WARN-band cell; `expected_ledgers.json` documents per-cell expected band |
-| **M2** | Deterministic verifier (normalize, tolerance bands, ledger, parse, recompute, verify) — proven on the M1 fixtures *before* any live agent ran |
-| **M3** | Headless `claude -p` wrapper: captures `cost_usd`, turns, latency, exit status, raw log; injectable subprocess for tests; `--bare` semantics understood and exploited |
-| **M4** | Three ground-truth clients behind one protocol (FMP candidate, SEC anchor / bootstrap gold, Daloopa MCP stub) with frozen point-in-time snapshots |
-| **M5** | Inspect-style harness, parallel grid with global rate-limiting + per-sample resumability, metrics, scorecard rendering (JSON / Markdown / HTML) |
-| **M6** | Daloopa→FMP **conversion** — surgical, deterministic token swap (no LLM rewrite); `fmp_data_access.md` analogue of Daloopa's `data-access.md`; paired A/B comparator wired |
-| **M7** | Skill-description optimization loop with protected analytical body, bounded edits (4–8 per step per SkillOpt), validation gate, 60/40 train/test, ≤5 iterations, feedback hooks |
+| Milestone | Delivered                                                                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **M0**    | Scaffolding; pydantic config that fails loudly on placeholder pins (model snapshot, skill SHA) and on candidate==gold                                                           |
+| **M1**    | Three hand-built known-answer fixtures with a deliberate-wrong cell and a WARN-band cell; `expected_ledgers.json` documents per-cell expected band                              |
+| **M2**    | Deterministic verifier (normalize, tolerance bands, ledger, parse, recompute, verify) — proven on the M1 fixtures _before_ any live agent ran                                   |
+| **M3**    | Headless `claude -p` wrapper: captures `cost_usd`, turns, latency, exit status, raw log; injectable subprocess for tests; `--bare` semantics understood and exploited           |
+| **M4**    | Three ground-truth clients behind one protocol (FMP candidate, SEC anchor / bootstrap gold, Daloopa MCP stub) with frozen point-in-time snapshots                               |
+| **M5**    | Inspect-style harness, parallel grid with global rate-limiting + per-sample resumability, metrics, scorecard rendering (JSON / Markdown / HTML)                                 |
+| **M6**    | Daloopa→FMP **conversion** — surgical, deterministic token swap (no LLM rewrite); `fmp_data_access.md` analogue of Daloopa's `data-access.md`; paired A/B comparator wired      |
+| **M7**    | Skill-description optimization loop with protected analytical body, bounded edits (4–8 per step per SkillOpt), validation gate, 60/40 train/test, ≤5 iterations, feedback hooks |
 
 Tests: **185+ passing**, all offline (network mocked). Each milestone TDD'd
 against the M2-proven verifier — no milestone advanced on red tests.
@@ -167,7 +167,7 @@ against the M2-proven verifier — no milestone advanced on red tests.
 
 ## 6. Iterations forced by live data
 
-This is where most of the *learning* happened. The pipeline's design predicts
+This is where most of the _learning_ happened. The pipeline's design predicts
 that a verifier should catch errors; observing it do so on live runs forced
 real engineering choices.
 
@@ -175,11 +175,11 @@ real engineering choices.
 
 The first three-run pilot (AAPL, FY2024, FMP backend):
 
-| Skill | Result |
-|---|---|
-| tearsheet | $0.47, 410 s, **artifact written, parsed cleanly, 17 cells, internally consistent margins** |
-| comps | **Timed out at 600 s.** |
-| capital-allocation | Did not run (script crashed on the comps timeout). |
+| Skill              | Result                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| tearsheet          | $0.47, 410 s, **artifact written, parsed cleanly, 17 cells, internally consistent margins** |
+| comps              | **Timed out at 600 s.**                                                                     |
+| capital-allocation | Did not run (script crashed on the comps timeout).                                          |
 
 Two real bugs surfaced:
 
@@ -196,12 +196,12 @@ neuro-symbolic split was visibly working.
 ### 6.2 Live SEC verify — and a SEC client bug it caught
 
 Running `verify(tearsheet_ledger, SECXBRLClient(...))` produced what looked
-like 6 disagreements. **The verifier was correct; the *gold* was wrong.**
+like 6 disagreements. **The verifier was correct; the _gold_ was wrong.**
 
 Each "disagreement" exactly matched AAPL's **FY2022** number (revenue
 $394.328B, NI $99.803B, etc.). The SEC client was filtering
-`fy==target_year + fp==FY + form==10-K`, but EDGAR tags *every comparative
-row in the FY2024 10-K* with `fy=2024` — so `next()` was grabbing the
+`fy==target_year + fp==FY + form==10-K`, but EDGAR tags _every comparative
+row in the FY2024 10-K_ with `fy=2024` — so `next()` was grabbing the
 earliest comparative (FY2022). The fix: select by the **data period's
 end-date year**, not the filing's `fy` field; tie-break on latest `filed`.
 
@@ -239,14 +239,14 @@ about with rule-based extractors. After review:
   grades): **skill 100% untouched**, layout-agnostic without per-layout
   code, hybrid the research recommends.
 
-The user's instinct — *evaluate the skill itself, don't alter it* — combined
+The user's instinct — _evaluate the skill itself, don't alter it_ — combined
 with the research, decided this cleanly. **Option C became the default
 ingestion path** in `extract/llm_extract.py`; `parse_xlsx` was retained as
 the deterministic fallback (still used for fixtures and as a sanity check).
 
 The maintenance economics flipped: instead of writing a regex per layout,
 the LLM extractor generalizes; instead of debugging live, you iterate the
-extractor *prompt* offline on cached artifacts, with the deterministic
+extractor _prompt_ offline on cached artifacts, with the deterministic
 verifier as the trustworthy backstop the research endorses for the hybrid.
 
 ### 6.4 Rate-limit blocker — and the Max-auth pivot
@@ -257,7 +257,7 @@ no artifact; subsequent runs returned in 1 s with `is_error: true`. Reading
 the failed run log:
 
 > `Request rejected (429) · This request would exceed your organization's
-> rate limit of 30,000 input tokens per minute (model: claude-sonnet-4-6)`
+rate limit of 30,000 input tokens per minute (model: claude-sonnet-4-6)`
 
 The 30k input-TPM tier is below a single skill run's burst (one tearsheet
 try logged 142k cache-creation + 366k cache-read + 39k output). The skill
@@ -285,7 +285,7 @@ distinct issues:
    `score_sample` for transient `exit_ok=False`.
 
 2. **False FAILs on rounding.** Many derived cells failed at `rel_err ≈
-   0.001–0.004` (0.1–0.4%) — well *inside* PASS bands but marked FAIL
+0.001–0.004` (0.1–0.4%) — well _inside_ PASS bands but marked FAIL
    because the stated-vs-recompute arithmetic check was using too strict a
    tolerance. The skill displays inputs rounded to millions; Python
    recomputes from those rounded inputs → off from the skill's stated
@@ -294,20 +294,20 @@ distinct issues:
 3. **Activation detection 0%.** The original `parse_activation` regex over
    the JSON envelope was looking for tokens that simply aren't in
    the `--output-format json` result. Switched to `--output-format
-   stream-json` with a parser that detects Read of the staged
+stream-json` with a parser that detects Read of the staged
    `skills/<name>/SKILL.md` path; Skill tool-use events are also matched.
 
 The re-run on the same 9 samples:
 
-| Metric | First run | After fixes |
-|---|---|---|
-| Artifacts produced | ~4/9 | **9/9** |
-| Pass-rate @ 1% | 36% | **87.2%** |
-| Activation | 0% | **22%** |
+| Metric             | First run | After fixes |
+| ------------------ | --------- | ----------- |
+| Artifacts produced | ~4/9      | **9/9**     |
+| Pass-rate @ 1%     | 36%       | **87.2%**   |
+| Activation         | 0%        | **22%**     |
 
 The remaining FAIL/FLAG concentrate on margins/multiples (definition
 divergence) and bank revenue (gross-vs-net concept mismatch) — the exact
-*informative* cross-vendor signal the bands were designed to surface, not
+_informative_ cross-vendor signal the bands were designed to surface, not
 skill bugs. Verbose log:
 [`results/_bigtest/scorecard.md`](../results/_bigtest/scorecard.md).
 
@@ -327,7 +327,7 @@ year-end) and JPM (bank) were added:
   metric). **The verifier caught a real skill error.**
 
 Additionally, a misleading "scale-normalized x0.001" note was being
-attached to FLAG cells where the scale factor *didn't* help — cleaned up
+attached to FLAG cells where the scale factor _didn't_ help — cleaned up
 so the note appears only when scaling actually achieves a PASS band.
 
 ### 6.7 Recompute robustness
@@ -335,7 +335,7 @@ so the note appears only when scaling actually achieves a PASS band.
 Live runs surfaced two derived-cell failure modes that crashed the
 verifier instead of being graded:
 
-1. A derived cell with a *recognized* canonical label (`ebitda_margin`,
+1. A derived cell with a _recognized_ canonical label (`ebitda_margin`,
    `yoy_growth`) but no entry in `METRIC_DEFS` — original code raised
    `ValueError("...has no formula")`. Fix: `recompute()` is now
    lenient-by-default — unregistered derived metrics skip; a `strict=True`
@@ -373,7 +373,7 @@ Replacements are ordered longest-first so `discover_company_series` is
 rewritten before `discover_companies`. Idempotent (FMP tokens contain none
 of the Daloopa source tokens). Everything else — the analysis steps, the
 value judgments, the report structure — is untouched byte-for-byte. The
-A/B is then *causal*: any output difference is attributable to the data
+A/B is then _causal_: any output difference is attributable to the data
 layer alone.
 
 Output: `skills/fmp/{tearsheet,comps,capital-allocation}/` — each bundling
@@ -385,14 +385,14 @@ credentials to execute variant A).
 
 ## 8. Live evidence summary
 
-| Run | Result | Notes |
-|---|---|---|
-| First pilot (3 invocations, AAPL) | tearsheet ✓, comps timeout, capital-alloc skipped | Surfaced TimeoutExpired bug + comps timeout |
-| Step 0 calibration (offline gold) | tearsheet 8/8 exact vs SEC | Caught the SEC period-selection bug |
-| Re-run (metered) | 429 rate-limit blocker | Documented; switched to Max for eval |
-| Stress test (NKE, JPM) | NKE clean off-cal; JPM caught a real skill error | shares_outstanding summed across quarters |
-| Big test (9 samples) — round 1 | 36% pass-rate, half no-artifact | Drove reliability + arith_tol fixes |
-| Big test (9 samples) — round 2 | **87.2%**, 9/9 artifacts, 100% on direct fundamentals | Production-shape result on real data |
+| Run                               | Result                                                | Notes                                       |
+| --------------------------------- | ----------------------------------------------------- | ------------------------------------------- |
+| First pilot (3 invocations, AAPL) | tearsheet ✓, comps timeout, capital-alloc skipped     | Surfaced TimeoutExpired bug + comps timeout |
+| Step 0 calibration (offline gold) | tearsheet 8/8 exact vs SEC                            | Caught the SEC period-selection bug         |
+| Re-run (metered)                  | 429 rate-limit blocker                                | Documented; switched to Max for eval        |
+| Stress test (NKE, JPM)            | NKE clean off-cal; JPM caught a real skill error      | shares_outstanding summed across quarters   |
+| Big test (9 samples) — round 1    | 36% pass-rate, half no-artifact                       | Drove reliability + arith_tol fixes         |
+| Big test (9 samples) — round 2    | **87.2%**, 9/9 artifacts, 100% on direct fundamentals | Production-shape result on real data        |
 
 A reviewer can scan the `git log` and see each fix go in with a regression
 test and a commit message that names the live finding it came from.
@@ -412,14 +412,10 @@ other stuff." That critique was triaged honestly:
   the FLAG mechanism. These map directly onto M7 design choices, several of
   which were already in the spec.
 - **Rejected (≈ 30%):** "Hallucination is rare here" — the cited literature
-  (§2.1) is unambiguous for *financial numerics specifically*. "Python
+  (§2.1) is unambiguous for _financial numerics specifically_. "Python
   verification doesn't work with LLM API calls" — a misread; Python isn't
   replicating the LLM's task, it's asking the data source the same question
   independently and comparing.
-
-The peer's bigger framing — "less verification, more optimization" —
-inverts for finance: a faster wrong number isn't a product. The verifier
-stays load-bearing; optimization sits on top.
 
 ---
 
@@ -456,7 +452,7 @@ Every functional unit, with its role:
   band name + relative error. Zero I/O. The PR bar for changes here is
   high: it's the verifier's bedrock.
 - **`verify.py`** — orchestrates parse → recompute → compare. For derived
-  cells, *two-leg* check: (a) stated vs Python recompute (arithmetic
+  cells, _two-leg_ check: (a) stated vs Python recompute (arithmetic
   integrity) and (b) Python recompute vs gold (data integrity).
   Coverage-aware: cells gold doesn't carry are SKIP, excluded from the
   pass-rate denominator. Scale-aware: tries `×{1, 1e3, 1e6, 1e9, 1e-3, ...}`
@@ -474,9 +470,9 @@ Every functional unit, with its role:
   robustly, and detects activation from stream-json events. `grid.py`
   defines `GridSample` and `score_sample` (the invoke→extract→verify→
   record assembly). `parallel.py` runs the grid with a `ThreadPoolExecutor`
-  + a global `RateLimiter`, resumable via per-sample JSON.
-  `run_baseline.py` is the top-level entry point with `--dry-run` for the
-  offline scorecard from fixture artifacts.
+  - a global `RateLimiter`, resumable via per-sample JSON.
+    `run_baseline.py` is the top-level entry point with `--dry-run` for the
+    offline scorecard from fixture artifacts.
 - **`metrics.py`** — aggregates a `SampleRecord` list into a `Metrics`
   with breakdowns by skill, ticker, FAITH cell-type, and tolerance band.
   FLAG and SKIP cells are excluded from the pass-rate denominator on
@@ -519,9 +515,9 @@ Every functional unit, with its role:
 - **N=9.** Pilot scale. The grid would extend to 192 cells (8 tickers × 4
   periods × 3 skills × 2 sources) once the Daloopa key arrives.
 - **M7 demonstrated in mechanics, not on a live optimization.** The loop
-  + candidate generator + validation gate are TDD'd offline; an end-to-end
-  live optimization with measurable before/after activation lift is the
-  next thing to run.
+  - candidate generator + validation gate are TDD'd offline; an end-to-end
+    live optimization with measurable before/after activation lift is the
+    next thing to run.
 
 ---
 
@@ -533,7 +529,7 @@ The three nearest wins:
 
 1. Authoritative activation-event detection — closes the 22% gap.
 2. Daloopa-key arrival → run the full paired A/B → publish the
-   `compare.py` scorecard. This is the project's *purpose-built* output.
+   `compare.py` scorecard. This is the project's _purpose-built_ output.
 3. Quarterly SEC 10-Q gold support for `capital-allocation` cell-level
    coverage.
 
@@ -546,7 +542,7 @@ ones); per-skill effect-size CIs.
 ## 13. Closing
 
 The pipeline catches real errors on real data (the JPM share-count bug;
-the SEC period-selection bug in our own code) and reports the *informative*
+the SEC period-selection bug in our own code) and reports the _informative_
 cross-vendor disagreements the research predicts (JPM bank revenue, NKE
 off-calendar fiscal). Headline accuracy at 87.2% on a 9-sample live pilot,
 100% on direct gold-covered fundamentals. The remaining open items are
