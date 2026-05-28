@@ -92,15 +92,22 @@ def normalize_period(raw: object) -> Optional[Period]:
     s = str(raw).strip()
     if not s:
         return None
+    # collapse internal whitespace/newlines and strip trailing month-suffix
+    # so "Q1 FY2024\nAug-23" -> "Q1 FY2024" (the date tag is noise)
+    s = re.sub(r"\s+", " ", s)
+    s = re.sub(r"\s+[A-Za-z]{3,9}[-’'][0-9]{2,4}\s*$", "", s).strip()
 
     mq = re.fullmatch(r"[Qq]([1-4])\s*[- ]?\s*(\d{2,4})", s)
     if mq:
         return Period("quarterly", _four_digit_year(mq.group(2)), int(mq.group(1)))
 
-    # "FY2023 Q1" / "FY23 Q1"
+    # "FY2023 Q1" / "FY23 Q1" / "Q1 FY2024" / "Q1 FY24"
     mfyq = re.fullmatch(r"(?:FY|fy)\s*(\d{2,4})\s*[Qq]([1-4])", s)
     if mfyq:
         return Period("quarterly", _four_digit_year(mfyq.group(1)), int(mfyq.group(2)))
+    mqfy = re.fullmatch(r"[Qq]([1-4])\s*(?:FY|fy)\s*(\d{2,4})", s)
+    if mqfy:
+        return Period("quarterly", _four_digit_year(mqfy.group(2)), int(mqfy.group(1)))
 
     # "Dec'22" / "Sep 24" / "Mar'2023" — calendar month + year -> calendar quarter
     mmon = re.fullmatch(r"([A-Za-z]{3,9})\s*['’]?\s*(\d{2,4})", s)
@@ -108,9 +115,17 @@ def normalize_period(raw: object) -> Optional[Period]:
         q = _MONTH_Q[mmon.group(1).lower()[:3]]
         return Period("quarterly", _four_digit_year(mmon.group(2)), q)
 
-    mfy = re.fullmatch(r"(?:FY|fy)?\s*(\d{2,4})", s)
-    if mfy:
-        return Period("annual", _four_digit_year(mfy.group(1)), None)
+    # Bare or FY-prefixed year. Bare numbers (no "FY") must be plausible years
+    # to prevent value cells like "5720" from being misread as fiscal years
+    # (which corrupted the NKE matrix-layout parse).
+    mfy_prefixed = re.fullmatch(r"(?:FY|fy)\s*(\d{2,4})", s)
+    if mfy_prefixed:
+        return Period("annual", _four_digit_year(mfy_prefixed.group(1)), None)
+    mfy_bare = re.fullmatch(r"(\d{4})", s)
+    if mfy_bare:
+        yr = int(mfy_bare.group(1))
+        if 1900 <= yr <= 2100:
+            return Period("annual", yr, None)
 
     mdate = re.fullmatch(r"(\d{4})-\d{2}-\d{2}", s)
     if mdate:

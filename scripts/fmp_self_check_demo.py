@@ -96,15 +96,21 @@ def main() -> int:
             return 2
         resolver = None
         if args.resolver:
-            # build a catalog of {endpoint: [fields]} from LABEL_MAP for the
-            # resolver to ground its proposals against.
-            cat: dict[str, list[str]] = {}
-            for ep, fld in LABEL_MAP.values():
-                cat.setdefault(ep, []).append(fld)
+            # Use FMP's FULL field universe (probed live, persisted to
+            # data/fmp_field_catalog.json) so the resolver can propose any
+            # FMP field, not just the ones already mapped.
+            cat_path = Path("data/fmp_field_catalog.json")
+            if not cat_path.exists():
+                print("ERROR: data/fmp_field_catalog.json missing; "
+                      "see scripts/fmp_self_check_demo.py for how to generate")
+                return 3
+            import json as _json
+            cat = _json.loads(cat_path.read_text())
             resolver = LLMLabelResolver(
                 cat, claude_resolver_fn, Path("data/label_cache.json"),
             )
-            print(f"Resolver: ENABLED ({sum(len(v) for v in cat.values())} fields)")
+            print(f"Resolver: ENABLED ({sum(len(v) for v in cat.values())} fields, "
+                  f"{len(cat)} endpoints)")
         fmp = FMPClient(api_key=key, resolver=resolver)
         print("Mode: live FMP")
 

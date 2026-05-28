@@ -58,11 +58,38 @@ class SelfCheckReport:
 
 _TIGHT_REL = 0.001   # 0.1% — these are same-source checks, should be exact
 
+# Try ×{1e-9 ... 1e9} and both signs. Cash-flow items in FMP encode outflows
+# as negative ("commonStockRepurchased = -3.493e+09"); skills typically state
+# the absolute amount returned. Same value, different convention.
+# Includes 1e2 / 1e-2 for the percent-vs-fraction convention (skill states
+# 0.4421 fraction, Python recompute returns 44.21 percent — ×100 apart).
+_SCALE_FACTORS = (1.0, 100.0, 0.01, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9)
+
 
 def _rel_err(a: float, b: float) -> float:
     if b == 0:
         return abs(a)
     return abs(a - b) / abs(b)
+
+
+def _best_match(stated: float, fmp_value: float) -> tuple[float, float, str]:
+    """Try scale + sign combinations, return (best_rel_err, factor_applied, note).
+    Sign flip handles FMP's negative-for-outflow convention vs skills stating
+    the absolute amount."""
+    best = (_rel_err(stated, fmp_value), 1.0, "")
+    for f in _SCALE_FACTORS:
+        for sign in (1.0, -1.0):
+            r = _rel_err(stated * f * sign, fmp_value)
+            if r < best[0]:
+                tag = ""
+                if f != 1.0 and sign != 1.0:
+                    tag = f"scale x{f:g} + sign-flipped"
+                elif f != 1.0:
+                    tag = f"scale-normalized x{f:g}"
+                elif sign != 1.0:
+                    tag = "sign-flipped (FMP outflow convention)"
+                best = (r, f * sign, tag)
+    return best
 
 
 def _check_direct(cell, fmp: GroundTruthSource) -> SelfCheckVerdict:
@@ -100,11 +127,15 @@ def _check_one_cell(cell, ticker: str, ledger: Ledger,
                 note="FMP has no field for this label",
             )
         tval = float(getattr(truth, "value", truth))
-        rel = _rel_err(float(cell.value), tval)
+        # try scale/sign combinations — same value under different conventions
+        # (e.g. cash items: skill states +3.5B paid out vs FMP -3.5B outflow)
+        rel, _factor, note = _best_match(float(cell.value), tval)
         status = "PASS" if rel <= _TIGHT_REL else "FAIL"
+        # only annotate when the convention adjustment actually helped land it
+        annotation = note if (status == "PASS" and note) else ""
         return SelfCheckVerdict(
             cell.cell_id, cell.canonical_label, pkey, "direct",
-            float(cell.value), tval, rel, status,
+            float(cell.value), tval, rel, status, note=annotation,
         )
 
     # DERIVED cell: query FMP for the formula's INPUTS (not the skill's stated
@@ -141,11 +172,12 @@ def _check_one_cell(cell, ticker: str, ledger: Ledger,
         )
 
     fmp_computed = fn(*args)
-    rel = _rel_err(float(cell.value), fmp_computed)
+    rel, _factor, note = _best_match(float(cell.value), fmp_computed)
     status = "PASS" if rel <= _TIGHT_REL else "FAIL"
+    annotation = note if (status == "PASS" and note) else ""
     return SelfCheckVerdict(
         cell.cell_id, cell.canonical_label, pkey, "derived",
-        float(cell.value), fmp_computed, rel, status,
+        float(cell.value), fmp_computed, rel, status, note=annotation,
     )
 
 

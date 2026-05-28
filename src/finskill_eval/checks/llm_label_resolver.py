@@ -75,6 +75,7 @@ def claude_resolver_fn(canonical_label: str, catalog: dict[str, list[str]]) -> O
     Kept light on imports so tests don't pull subprocess machinery.
     """
     import json as _json
+    import os
     import subprocess
 
     flat = "\n".join(
@@ -89,10 +90,13 @@ def claude_resolver_fn(canonical_label: str, catalog: dict[str, list[str]]) -> O
         f'{{"endpoint": "<name>", "field": "<name>"}}. '
         f"If no good match exists, respond with the literal token NONE."
     )
+    # Use Max-subscription OAuth: strip ANTHROPIC_API_KEY so the CLI falls back
+    # to the local login instead of the metered key.
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     try:
         proc = subprocess.run(
             ["claude", "-p", prompt, "--output-format", "json", "--max-turns", "1"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, timeout=60, env=env,
         )
         if proc.returncode != 0:
             return None
