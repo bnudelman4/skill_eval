@@ -161,3 +161,42 @@ def test_live_headless_envelope_is_parseable():
     env = parse_envelope(proc.stdout)
     assert env.cost_usd > 0.0
     assert env.num_turns >= 1
+
+
+def test_find_artifact_discovers_misplaced_xlsx(tmp_path):
+    from finskill_eval.runner.invoke_skill import _find_artifact
+    # skill saved to its own reports/ path, not the one we asked for
+    (tmp_path / "reports").mkdir()
+    f = tmp_path / "reports" / "AAPL_tearsheet.xlsx"
+    f.write_bytes(b"PK\x03\x04")
+    # staged skill file under .claude must be ignored
+    (tmp_path / ".claude" / "skills").mkdir(parents=True)
+    (tmp_path / ".claude" / "skills" / "x.xlsx").write_bytes(b"PK")
+    found = _find_artifact(tmp_path)
+    assert found == f
+
+
+def test_run_skill_finds_misplaced_artifact(tmp_path):
+    wd = tmp_path / "wd"
+    def fake_runner(cmd, cwd, timeout, env=None):
+        out = Path(cwd) / "reports"; out.mkdir(parents=True, exist_ok=True)
+        (out / "AAPL_tearsheet.xlsx").write_bytes(b"PK\x03\x04")
+        return ProcResult(json.dumps(SAMPLE_ENVELOPE), "", 0)
+    run = run_skill("tearsheet","AAPL","FY2024","fmp", workdir=wd,
+                    model="m", timeout=600, runner=fake_runner)
+    assert run.artifact_path is not None and run.artifact_path.endswith("AAPL_tearsheet.xlsx")
+
+
+def test_build_command_streamjson_adds_verbose():
+    from finskill_eval.runner.invoke_skill import build_command
+    cmd = build_command(prompt="x", model="m", max_turns=1,
+                        allowed_tools=["Read"], bare=False, output_format="stream-json")
+    assert "--verbose" in cmd
+
+
+def test_parse_activation_from_streamjson_skill_path():
+    # agent reading the staged skill is the activation signal
+    log = '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/wd/.claude/skills/capital-allocation/SKILL.md"}}]}}'
+    observed, selected = parse_activation(log, "capital_allocation")
+    assert observed is True                      # hyphen/underscore-insensitive
+    assert selected == "capital-allocation"

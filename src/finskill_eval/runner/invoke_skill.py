@@ -70,6 +70,8 @@ def build_command(
     cmd = ["claude", "-p", prompt, "--output-format", output_format]
     cmd += ["--model", model, "--max-turns", str(max_turns)]
     cmd += ["--allowedTools", ",".join(allowed_tools)]
+    if output_format == "stream-json":
+        cmd.append("--verbose")  # required by claude -p for stream-json
     if bare:
         cmd.append("--bare")
     return cmd
@@ -105,6 +107,8 @@ def parse_envelope(stdout: str) -> Envelope:
 
 
 _SKILL_PATTERNS = [
+    # stream-json: the agent reads the staged skill at .../skills/<name>/SKILL.md
+    re.compile(r"skills/([a-z0-9_\-]+)/SKILL", re.IGNORECASE),
     re.compile(r"[Uu]sing skill ['\"]?([a-z0-9_\-]+)['\"]?"),
     re.compile(r"Skill\(([a-z0-9_\-]+)\)"),
     re.compile(r"skill[: ]+['\"]([a-z0-9_\-]+)['\"]"),
@@ -117,13 +121,18 @@ def parse_activation(log: str, intended_skill: str) -> tuple[bool, Optional[str]
     activation_observed (intended triggered) and skill_selected (which one) are
     distinct metrics, kept separate on purpose.
     """
+    def _canon(s: Optional[str]) -> Optional[str]:
+        return s.replace("-", "_").lower() if s else s
+
     selected: Optional[str] = None
     for pat in _SKILL_PATTERNS:
         m = pat.search(log)
         if m:
             selected = m.group(1)
             break
-    return (selected == intended_skill, selected)
+    # compare hyphen/underscore-insensitively (skill dir 'capital-allocation'
+    # vs config name 'capital_allocation')
+    return (_canon(selected) == _canon(intended_skill), selected)
 
 
 TIMEOUT_RETURNCODE = 124  # conventional timeout exit code
@@ -143,6 +152,17 @@ def _default_runner(
         err = exc.stderr.decode() if isinstance(exc.stderr, bytes) else (exc.stderr or "")
         return ProcResult(out, f"{err}\nTIMEOUT after {timeout}s", TIMEOUT_RETURNCODE)
     return ProcResult(proc.stdout, proc.stderr, proc.returncode)
+
+
+def _find_artifact(workdir: Path) -> Optional[Path]:
+    """Newest .xlsx anywhere under workdir, excluding the staged skill dir."""
+    cands = [
+        p for p in workdir.rglob("*.xlsx")
+        if ".claude" not in p.parts
+    ]
+    if not cands:
+        return None
+    return max(cands, key=lambda p: p.stat().st_mtime)
 
 
 def _build_prompt(skill: str, ticker: str, period: str, data_source: str, out: str) -> str:
@@ -165,7 +185,7 @@ def run_skill(
     timeout: int,
     allowed_tools: Optional[list[str]] = None,
     bare: bool = True,
-    output_format: str = "json",
+    output_format: str = "stream-json",  # full event stream -> activation signal
     runner: Optional[Runner] = None,
     skill_src_dir: Optional[Path] = None,
     use_subscription: bool = False,
@@ -221,13 +241,18 @@ def run_skill(
     exit_ok = proc.returncode == 0 and not env_error
     observed, selected = parse_activation(proc.stdout + "\n" + proc.stderr, skill_name)
 
+    # Robust artifact discovery: the skill body may save the deliverable to its
+    # own path (e.g. reports/{TICKER}...) rather than the path we asked for. If
+    # the exact path is missing, take the newest .xlsx anywhere under the workdir.
+    found = artifact if artifact.exists() else _find_artifact(workdir)
+
     return SkillRun(
         skill=skill_name,
         ticker=ticker,
         period=period,
         data_source=data_source,
         workdir=str(workdir),
-        artifact_path=str(artifact) if (exit_ok and artifact.exists()) else None,
+        artifact_path=str(found) if (exit_ok and found is not None) else None,
         cost_usd=cost_usd,
         latency_s=latency_s,
         num_turns=num_turns,

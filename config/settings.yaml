@@ -97,7 +97,7 @@ invocation:
     - Bash
     - Write
   max_turns: 25
-  timeout_s: 600
+  timeout_s: 900               # comps (peer group) needs >600s
   live_smoke_env_flag: FINSKILL_ALLOW_LIVE
 
 # -----------------------------------------------------------------------------

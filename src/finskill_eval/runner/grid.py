@@ -90,6 +90,7 @@ def score_sample(
     ground_truth: GroundTruthSource,
     workdir_root: Path,
     parse_fn: Optional[ParseFn] = None,
+    invoke_tries: int = 2,
 ) -> SampleRecord:
     # Default ingestion is Option C (LLM extraction): robust to free-form skill
     # layouts with no per-layout code. parse_xlsx remains injectable as the
@@ -97,10 +98,16 @@ def score_sample(
     parse_fn = parse_fn or (lambda path, skill, ticker: extract_ledger(path, skill=skill, ticker=ticker))
     workdir = Path(workdir_root) / sample.sample_id
 
-    run = invoke_fn(
-        sample.skill, sample.ticker, sample.period, sample.data_source,
-        workdir=workdir,
-    )
+    # Skill runs are nondeterministic (transient socket drops, no-artifact);
+    # retry until we get an artifact or tries are exhausted.
+    run = None
+    for attempt in range(1, max(1, invoke_tries) + 1):
+        run = invoke_fn(
+            sample.skill, sample.ticker, sample.period, sample.data_source,
+            workdir=workdir if attempt == 1 else Path(f"{workdir}__try{attempt}"),
+        )
+        if run.exit_ok and run.artifact_path:
+            break
 
     base = dict(
         skill=sample.skill, ticker=sample.ticker, period=sample.period,
