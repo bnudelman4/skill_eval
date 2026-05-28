@@ -19,19 +19,58 @@ from finskill_eval.groundtruth.base import Value
 
 logger = logging.getLogger(__name__)
 
-# canonical label -> (endpoint, field)
+# canonical label -> (endpoint, field).
+# Extending this is bounded (financial metric universe is closed) and one-line
+# per addition; this is NOT the open-ended parser problem.
 LABEL_MAP: dict[str, tuple[str, str]] = {
+    # income-statement
     "revenue": ("income-statement", "revenue"),
     "net_income": ("income-statement", "netIncome"),
     "gross_profit": ("income-statement", "grossProfit"),
     "operating_income": ("income-statement", "operatingIncome"),
     "ebitda": ("income-statement", "ebitda"),
     "shares_outstanding": ("income-statement", "weightedAverageShsOutDil"),
+    "diluted_eps": ("income-statement", "epsdiluted"),
+    "basic_eps": ("income-statement", "eps"),
+    "cost_of_revenue": ("income-statement", "costOfRevenue"),
+    "rd_expense": ("income-statement", "researchAndDevelopmentExpenses"),
+    "sga_expense": ("income-statement", "sellingGeneralAndAdministrativeExpenses"),
+    "interest_expense": ("income-statement", "interestExpense"),
+    "depreciation_and_amortization": ("income-statement", "depreciationAndAmortization"),
+    # balance-sheet
     "cash_and_equivalents": ("balance-sheet-statement", "cashAndCashEquivalents"),
+    "short_term_investments": ("balance-sheet-statement", "shortTermInvestments"),
+    "total_debt": ("balance-sheet-statement", "totalDebt"),
+    "long_term_debt": ("balance-sheet-statement", "longTermDebt"),
+    "short_term_debt": ("balance-sheet-statement", "shortTermDebt"),
+    "total_equity": ("balance-sheet-statement", "totalStockholdersEquity"),
+    "total_assets": ("balance-sheet-statement", "totalAssets"),
+    # cash-flow
+    "operating_cash_flow": ("cash-flow-statement", "operatingCashFlow"),
+    "capital_expenditures": ("cash-flow-statement", "capitalExpenditure"),
+    "free_cash_flow": ("cash-flow-statement", "freeCashFlow"),
     "dividends_paid": ("cash-flow-statement", "netDividendsPaid"),
     "share_repurchases": ("cash-flow-statement", "commonStockRepurchased"),
+    "acquisitions": ("cash-flow-statement", "acquisitionsNet"),
+    # market / valuation
     "market_capitalization": ("key-metrics", "marketCap"),
     "enterprise_value": ("key-metrics", "enterpriseValue"),
+    "price": ("quote", "price"),
+    # FMP-published derived metrics (skip our recompute, use FMP's number)
+    # Margins are stored as fractions in FMP's `ratios` endpoint; the verifier
+    # already handles scale-normalization so 0.4621 vs 46.21 will land in band.
+    "gross_margin": ("ratios", "grossProfitMargin"),
+    "operating_margin": ("ratios", "operatingProfitMargin"),
+    "net_margin": ("ratios", "netProfitMargin"),
+    "ebitda_margin": ("ratios", "ebitdaratio"),
+    "pe_ratio": ("ratios", "priceEarningsRatio"),
+    "ev_ebitda": ("key-metrics", "enterpriseValueOverEBITDA"),
+    "ps_ratio": ("ratios", "priceToSalesRatio"),
+    "pb_ratio": ("ratios", "priceToBookRatio"),
+    "dividend_yield": ("ratios", "dividendYield"),
+    "interest_coverage": ("ratios", "interestCoverage"),
+    "debt_to_equity": ("ratios", "debtEquityRatio"),
+    "fcf_yield": ("ratios", "freeCashFlowYield"),
 }
 
 Fetch = Callable[[str, dict], object]
