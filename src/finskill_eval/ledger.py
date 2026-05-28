@@ -28,6 +28,11 @@ class Cell(BaseModel):
     # derived-cell provenance: formula name + input cell_ids it recomputes from
     formula: Optional[str] = None
     inputs: tuple[str, ...] = ()
+    # LLM-extractor-proposed FMP mapping (when present, bypasses LABEL_MAP /
+    # resolver). Allows the extractor — with SKILL.md + FMP catalog in context —
+    # to map skill-specific labels directly to FMP fields per cell.
+    fmp_endpoint: Optional[str] = None
+    fmp_field: Optional[str] = None
 
 
 class Ledger(BaseModel):

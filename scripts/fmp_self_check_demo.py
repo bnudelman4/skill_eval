@@ -75,6 +75,10 @@ def main() -> int:
     ap.add_argument("--resolver", action="store_true",
                     help="enable LLM fallback for unmapped canonical labels "
                          "(uses claude -p; results cached to data/label_cache.json)")
+    ap.add_argument("--llm-extract", action="store_true",
+                    help="use the LLM extractor with SKILL.md + FMP catalog "
+                         "in context to propose per-cell FMP mappings inline "
+                         "(uses claude -p Haiku via Max sub auth)")
     args = ap.parse_args()
 
     artifact = Path(args.artifact)
@@ -82,8 +86,33 @@ def main() -> int:
         print(f"ERROR: artifact not found: {artifact}")
         return 1
     print(f"Loading {artifact}")
-    led = parse(artifact, skill=args.skill, ticker=args.ticker)
-    print(f"  parsed {len(led.cells)} cells")
+    if args.llm_extract:
+        # Run the LLM extractor with SKILL.md + FMP catalog in context. The
+        # extractor proposes a per-cell FMP mapping inline so the verifier
+        # never needs LABEL_MAP / resolver lookups for those cells.
+        import json as _json
+        from finskill_eval.extract.llm_extract import extract_ledger
+        skill_dir_name = args.skill.replace("_", "-")
+        skill_md_path = Path("skills/fmp") / skill_dir_name / "SKILL.md"
+        if not skill_md_path.exists():
+            print(f"ERROR: SKILL.md not found at {skill_md_path}")
+            return 4
+        skill_md = skill_md_path.read_text()
+        cat_path = Path("data/fmp_field_catalog.json")
+        if not cat_path.exists():
+            print(f"ERROR: data/fmp_field_catalog.json not found "
+                  f"(probe FMP once to generate it)")
+            return 4
+        fmp_catalog = _json.loads(cat_path.read_text())
+        led = extract_ledger(
+            artifact, skill=args.skill, ticker=args.ticker,
+            skill_md=skill_md, fmp_catalog=fmp_catalog,
+        )
+        mapped = sum(1 for c in led.cells if c.fmp_endpoint and c.fmp_field)
+        print(f"  extracted {len(led.cells)} cells, {mapped} carry FMP mapping inline")
+    else:
+        led = parse(artifact, skill=args.skill, ticker=args.ticker)
+        print(f"  parsed {len(led.cells)} cells (deterministic parser)")
 
     if args.mock:
         fmp = MockFMP(AAPL_FY2024_TRUTH)

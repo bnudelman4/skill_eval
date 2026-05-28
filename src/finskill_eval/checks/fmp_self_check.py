@@ -117,9 +117,16 @@ def _check_one_cell(cell, ticker: str, ledger: Ledger,
             None, None, None, "SKIP", note="non-numeric cell",
         )
 
-    # DIRECT cell: look up the canonical field directly in FMP
+    # DIRECT cell: look up the canonical field directly in FMP. Prefer the
+    # extractor-proposed mapping (it had SKILL.md + catalog in context); fall
+    # back to LABEL_MAP / resolver via .get().
     if cell.kind == "direct":
-        truth = fmp.get(ticker, pkey, cell.canonical_label)
+        if cell.fmp_endpoint and cell.fmp_field and hasattr(fmp, "get_by_spec"):
+            truth = fmp.get_by_spec(
+                ticker, pkey, cell.fmp_endpoint, cell.fmp_field, cell.canonical_label
+            )
+        else:
+            truth = fmp.get(ticker, pkey, cell.canonical_label)
         if truth is None:
             return SelfCheckVerdict(
                 cell.cell_id, cell.canonical_label, pkey, "direct",

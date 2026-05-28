@@ -199,6 +199,10 @@ def build_ledger(raw_cells: list[dict], *, skill: str, ticker: str) -> Ledger:
                 unit=unit,
                 kind=kind,
                 cell_type="direct_lookup" if kind == "direct" else None,
+                # Per-cell FMP mapping (from the LLM extractor's SKILL.md +
+                # catalog-aware pass). Default None when raw_cell doesn't carry it.
+                fmp_endpoint=rc.get("fmp_endpoint"),
+                fmp_field=rc.get("fmp_field"),
             )
         )
         by_label_period[(canonical, pkey)] = cell_id

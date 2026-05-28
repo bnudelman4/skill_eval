@@ -242,6 +242,14 @@ class FMPClient:
         self._fetch = fetch or self._default_fetch
         self._resolver = resolver
 
+    def get_by_spec(
+        self, ticker: str, period: Optional[str], endpoint: str, field: str,
+        canonical_label: str = "",
+    ) -> Optional[Value]:
+        """Look up an (endpoint, field) directly — bypasses LABEL_MAP / resolver.
+        Used when the LLM extractor proposes a per-cell mapping inline."""
+        return self._fetch_one(ticker, period, endpoint, field, canonical_label)
+
     def get(
         self, ticker: str, period: Optional[str], canonical_label: str
     ) -> Optional[Value]:
@@ -252,6 +260,12 @@ class FMPClient:
         if spec is None:
             return None
         endpoint, field = spec
+        return self._fetch_one(ticker, period, endpoint, field, canonical_label)
+
+    def _fetch_one(
+        self, ticker: str, period: Optional[str], endpoint: str, field: str,
+        canonical_label: str = "",
+    ) -> Optional[Value]:
         parsed = _parse_period(period or "")
         if parsed is None:
             return None
