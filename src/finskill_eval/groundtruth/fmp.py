@@ -205,6 +205,25 @@ def _fiscal_year(period: str) -> Optional[int]:
     return int(m.group(1)) if m else None
 
 
+def _parse_period(period: str) -> Optional[tuple[int, Optional[int]]]:
+    """Parse a period_key into (fiscal_year, quarter_or_None).
+
+    Supports the formats normalize.period_key emits:
+        "FY2024"      -> (2024, None)   annual
+        "Q1 2024"     -> (2024, 1)      quarterly
+        "Q4 2023"     -> (2023, 4)
+    Returns None if the format isn't recognized (caller then SKIPs).
+    """
+    s = (period or "").strip()
+    m_fy = re.fullmatch(r"FY(\d{4})", s)
+    if m_fy:
+        return int(m_fy.group(1)), None
+    m_q = re.fullmatch(r"Q([1-4])\s+(\d{4})", s)
+    if m_q:
+        return int(m_q.group(2)), int(m_q.group(1))
+    return None
+
+
 class FMPClient:
     def __init__(
         self,
@@ -233,17 +252,36 @@ class FMPClient:
         if spec is None:
             return None
         endpoint, field = spec
-        fy = _fiscal_year(period or "")
-        if fy is None:
+        parsed = _parse_period(period or "")
+        if parsed is None:
             return None
+        fy, quarter = parsed
 
-        rows = self._fetch(endpoint, {"symbol": ticker})
+        # Quarterly periods need `period=quarter` on the FMP endpoint; annual
+        # uses the default (annual rows tagged FY). limit=20 covers ~5 years of
+        # quarterly or 20 years annual; FMP's default cap of 5 was dropping
+        # older periods (e.g. FY2024 quarters when 2026 data is current).
+        fetch_params: dict[str, object] = {"symbol": ticker, "limit": 20}
+        if quarter is not None:
+            fetch_params["period"] = "quarter"
+
+        rows = self._fetch(endpoint, fetch_params)
         if not isinstance(rows, list):
             return None
-        row = next(
-            (r for r in rows if int(r.get("fiscalYear", r.get("calendarYear", -1))) == fy),
-            None,
-        )
+        if quarter is None:
+            row = next(
+                (r for r in rows if int(r.get("fiscalYear", r.get("calendarYear", -1))) == fy),
+                None,
+            )
+        else:
+            # quarterly: match both fiscal year AND the period tag (Q1..Q4)
+            target_period = f"Q{quarter}"
+            row = next(
+                (r for r in rows
+                 if int(r.get("fiscalYear", r.get("calendarYear", -1))) == fy
+                 and str(r.get("period", "")).upper() == target_period),
+                None,
+            )
         if row is None or field not in row or row[field] is None:
             return None
 

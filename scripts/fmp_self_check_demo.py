@@ -22,8 +22,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from finskill_eval.checks.fmp_self_check import render_markdown, run_fmp_self_check
+from finskill_eval.checks.llm_label_resolver import (
+    LLMLabelResolver,
+    claude_resolver_fn,
+)
 from finskill_eval.groundtruth.base import Value
-from finskill_eval.groundtruth.fmp import FMPClient
+from finskill_eval.groundtruth.fmp import LABEL_MAP, FMPClient
 from finskill_eval.parse_xlsx import parse
 
 
@@ -68,6 +72,9 @@ def main() -> int:
                     help="use baked-in AAPL FY2024 truth, no network")
     ap.add_argument("--ticker", default="AAPL")
     ap.add_argument("--skill", default="tearsheet")
+    ap.add_argument("--resolver", action="store_true",
+                    help="enable LLM fallback for unmapped canonical labels "
+                         "(uses claude -p; results cached to data/label_cache.json)")
     args = ap.parse_args()
 
     artifact = Path(args.artifact)
@@ -87,7 +94,18 @@ def main() -> int:
         if not key:
             print("ERROR: FMP_API_KEY not set; use --mock for offline demo")
             return 2
-        fmp = FMPClient(api_key=key)
+        resolver = None
+        if args.resolver:
+            # build a catalog of {endpoint: [fields]} from LABEL_MAP for the
+            # resolver to ground its proposals against.
+            cat: dict[str, list[str]] = {}
+            for ep, fld in LABEL_MAP.values():
+                cat.setdefault(ep, []).append(fld)
+            resolver = LLMLabelResolver(
+                cat, claude_resolver_fn, Path("data/label_cache.json"),
+            )
+            print(f"Resolver: ENABLED ({sum(len(v) for v in cat.values())} fields)")
+        fmp = FMPClient(api_key=key, resolver=resolver)
         print("Mode: live FMP")
 
     report = run_fmp_self_check(led, fmp)
