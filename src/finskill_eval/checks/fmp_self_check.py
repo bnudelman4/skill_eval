@@ -56,7 +56,10 @@ class SelfCheckReport:
         return (c.get("PASS", 0) / denom) if denom else 0.0
 
 
-_TIGHT_REL = 0.001   # 0.1% — these are same-source checks, should be exact
+_TIGHT_REL = 0.005   # 0.5% — derived ratios computed from display-rounded
+                     # inputs (skill emits 391035 = $millions) routinely
+                     # disagree with FMP's full-precision values by 0.1-0.3%.
+                     # 0.5% matches the xvendor_standard PASS band in verify.py.
 
 # Try ×{1e-9 ... 1e9} and both signs. Cash-flow items in FMP encode outflows
 # as negative ("commonStockRepurchased = -3.493e+09"); skills typically state

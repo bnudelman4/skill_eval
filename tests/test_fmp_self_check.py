@@ -43,9 +43,9 @@ def test_direct_cell_pass_when_skill_matches_fmp():
 
 
 def test_direct_cell_fail_when_skill_transcribes_wrong():
-    # 392_000 vs 391_035 -> rel_err ~ 0.25% -> outside the 0.1% tight band
+    # 400B vs 391.035B -> rel_err ~ 2.3% -> outside the 0.5% tight band
     led = Ledger(skill="tearsheet", ticker="AAPL",
-                 cells=[_direct_cell("revenue", 392_000_000_000.0)])
+                 cells=[_direct_cell("revenue", 400_000_000_000.0)])
     fmp = FakeFMP({"revenue": 391_035_000_000.0})
     report = run_fmp_self_check(led, fmp)
     assert report.verdicts[0].status == "FAIL"
