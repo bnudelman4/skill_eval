@@ -79,7 +79,33 @@ metrics on the scorecard, each tied to a _different_ fix path. The M7 optimizer
 restricts itself to editing description + progressive-disclosure structure;
 the analytical body is protected.
 
-### 2.4 The parser→extractor pivot (the mid-project change)
+### 2.4 WorkstreamBench: three-dimensional evaluation taxonomy
+
+[WorkstreamBench (arXiv 2605.22664)](https://arxiv.org/abs/2605.22664)
+evaluates LLM agents on end-to-end spreadsheet tasks in finance with a
+three-dimensional taxonomy: Accuracy, Formula, and Format. This is the
+closest published methodology to what this project does, and the three
+dimensions map cleanly onto the layers in the pipeline:
+
+- Accuracy: the per-cell PASS rate via the banded tolerance schema in
+  `verify.py`, scored against an independent ground-truth source.
+- Formula: the FMP-self-check derived-cell leg, where Python recomputes
+  every margin, ratio, growth, and yield from the inputs FMP itself
+  returns and compares to the skill's stated value. The "did the LLM do
+  the right math from the right inputs" check.
+- Format: the workflow-completion layer that the second worker pointed
+  at, which is the next milestone in this project rather than a current
+  one. Checks whether the deliverable includes every section the skill
+  prescribed.
+
+The three-dimensional split is not invented for this project. It is
+peer-reviewed prior art that validates the architectural choice. The
+specific implementation in this project is specialized for the Daloopa
+to FMP A/B question with three-source triangulation, but the
+methodological alignment with WorkstreamBench is the load-bearing
+citation for the scorecard's structure.
+
+### 2.5 The parser→extractor pivot (the mid-project change)
 
 Two literatures converged on a single recommendation:
 
@@ -387,6 +413,14 @@ StructEval arXiv 2505.20139). For financial documents specifically the
 recommended pattern is to decompose extraction into specialized subtasks
 with verification loops (arXiv 2603.22651). Label-to-FMP mapping is now
 one of those subtasks, done in the same pass as cell extraction.
+
+This layer is also the Formula dimension of
+[WorkstreamBench (arXiv 2605.22664)](https://arxiv.org/abs/2605.22664).
+The verifier independently re-derives every derived metric from the
+inputs available in FMP, which is the published methodology's way of
+catching "the agent used the wrong inputs" or "applied the wrong
+formula" failures without flagging legitimate cross-vendor
+disagreements.
 
 After this change the live results were:
 
